@@ -17,9 +17,11 @@ on:
 env:
   WINE_SOURCE_REPO: https://github.com/GameNative/proton-wine
   WINE_REF: ${{ github.event.inputs.wine_ref || 'proton_10.0' }}
-  # Upstream Valve branch to merge nightly changes from
+  # Upstream Valve Wine branch to merge nightly changes from.
+  # bleeding-edge = the branch ValveSoftware/Proton bleeding-edge pins its
+  # wine submodule to; always the most up-to-date Valve Wine commits.
   UPSTREAM_REPO: https://github.com/ValveSoftware/wine
-  UPSTREAM_REF: proton_10.0
+  UPSTREAM_REF: bleeding-edge
 
 jobs:
   build:
@@ -329,12 +331,12 @@ jobs:
 
             **Build date:** ${{ env.GIT_DATE }}
             **Build commit:** ${{ env.GIT_HASH }}
-            **Valve upstream:** ValveSoftware/wine @ ${{ env.UPSTREAM_SHORT }}
+            **Valve upstream:** ValveSoftware/wine bleeding-edge @ ${{ env.UPSTREAM_SHORT }}
             **Base:** GameNative/proton-wine (Android patches + ARM64EC bylaws patches)
             **Target:** Android ARM64 (API 28+, bionic)
             **Toolchain:** Android NDK r27d + bylaws/llvm-mingw-20250920
 
-            > Upstream Valve `proton_10.0` commits are automatically merged each night.
+            > Upstream Valve `bleeding-edge` (the Wine branch Proton bleeding-edge tracks) is automatically merged each night.
             > GameNative patches take priority on conflict.
             > This is an automated nightly build for testing purposes. Use at your own risk.
 
