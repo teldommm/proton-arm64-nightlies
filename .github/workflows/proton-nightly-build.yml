@@ -150,8 +150,8 @@ jobs:
         # CC/CXX are explicitly unset to prevent env leakage from ccache step.
         # The cross-compile configure will check for tools/makedep in this dir.
         run: |
-          mkdir -p wine-build/tools
-          cd wine-build/tools
+          mkdir -p wine-build/host
+          cd wine-build/host
           env -u CC -u CXX ../../wine-source/configure \
             --enable-win64 \
             --without-x \
@@ -190,7 +190,7 @@ jobs:
           PREFIX=/data/data/com.winlator.cmod/files/imagefs/usr/opt/wine
           ../../wine-source/configure \
             --host=aarch64-linux-android \
-            --with-wine-tools="$(pwd)/../tools" \
+            --with-wine-tools="$(pwd)/../host" \
             --prefix="${PREFIX}" \
             --bindir="${PREFIX}/bin" \
             --libdir="${PREFIX}/lib" \
