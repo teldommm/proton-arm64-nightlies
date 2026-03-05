@@ -1,6 +1,6 @@
 name: Proton ARM64 Nightly Build
 
-on:
+"on":
   schedule:
     - cron: '0 2 * * *'   # 2 AM UTC daily
   workflow_dispatch:        # Manual trigger
