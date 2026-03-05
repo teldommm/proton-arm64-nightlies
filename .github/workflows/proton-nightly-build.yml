@@ -55,15 +55,16 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential \
             flex bison \
-            libgnutls28-dev \
-            libunwind-dev \
+            mingw-w64 \
             pkg-config \
+            autoconf \
             ccache \
             zstd \
             python3-pip \
             git \
             tar \
-            xz-utils
+            xz-utils \
+            unzip
           pip3 install zstandard --quiet
 
       # --------------------------------------------------------
@@ -98,7 +99,7 @@ jobs:
           path: build-scripts
 
       # --------------------------------------------------------
-      # 5. Clone Wine source (with shallow clone for speed)
+      # 5. Clone Wine source and prepare build system
       # --------------------------------------------------------
       - name: Clone Wine source
         run: |
@@ -106,6 +107,16 @@ jobs:
             "${{ env.WINE_SOURCE_REPO }}" wine-source
           echo "GIT_HASH=$(git -C wine-source rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')" >> $GITHUB_ENV
+
+      - name: Prepare Wine build system
+        # Wine 9+ requires these scripts to run before configure.
+        # They regenerate Makefile.in files, request stubs, and run autoreconf.
+        run: |
+          cd wine-source
+          ./tools/make_requests
+          ./tools/make_specfiles
+          ./tools/make_makefiles
+          autoreconf -f
 
       # --------------------------------------------------------
       # 6. ccache setup
@@ -136,15 +147,38 @@ jobs:
       # --------------------------------------------------------
       - name: Build host wine-tools
         # Must use the native host compiler (not the NDK cross-compiler).
-        # CC/CXX are explicitly unset here to prevent any env leakage.
+        # CC/CXX are explicitly unset to prevent env leakage from ccache step.
+        # The cross-compile configure will check for tools/makedep in this dir.
         run: |
           mkdir -p wine-build/tools
           cd wine-build/tools
           env -u CC -u CXX ../../wine-source/configure \
             --enable-win64 \
             --without-x \
-            --without-freetype
-          make __builtin__ -j$(nproc)
+            --without-freetype \
+            --without-gnutls \
+            --without-unwind \
+            --without-pulse \
+            --without-gstreamer \
+            --without-alsa \
+            --without-sdl \
+            --without-vulkan \
+            --without-cups \
+            --without-krb5 \
+            --without-netapi \
+            --without-gphoto \
+            --without-udev \
+            --without-capi \
+            --without-ffmpeg
+          # Build only the host tools needed for cross-compilation.
+          # Wine 9+ uses a flat Makefile; these are the specific targets needed.
+          make -j$(nproc) \
+            tools/makedep \
+            tools/winebuild/winebuild \
+            tools/widl/widl \
+            tools/wrc/wrc \
+            tools/wmc/wmc \
+            tools/winegcc/winegcc
 
       # --------------------------------------------------------
       # 8. Configure ARM64 target
@@ -162,10 +196,23 @@ jobs:
             --enable-archs=aarch64,i386 \
             --without-x \
             --without-freetype \
+            --without-gnutls \
+            --without-unwind \
             --without-dbus \
             --without-openldap \
             --without-sane \
             --without-netapi \
+            --without-pulse \
+            --without-gstreamer \
+            --without-alsa \
+            --without-sdl \
+            --without-vulkan \
+            --without-cups \
+            --without-krb5 \
+            --without-gphoto \
+            --without-udev \
+            --without-capi \
+            --without-ffmpeg \
             CC="${{ env.CROSS_CC }}" \
             CXX="${{ env.CROSS_CXX }}" \
             AR="${{ env.CROSS_AR }}" \
