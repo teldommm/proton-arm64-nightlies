@@ -152,6 +152,9 @@ jobs:
           python3 scripts/fix_suspend_chain.py wine-source
 
           # Force-apply additional BYLAWS drift-prone patches and verify markers.
+          echo "=== fix_test_bylaws_chain.py header ==="
+          sed -n '1,40p' scripts/fix_test_bylaws_chain.py
+          if ! grep -q 'Script rev: 2026-03-06-driftproof-v1' scripts/fix_test_bylaws_chain.py; then echo 'ERROR: stale fix_test_bylaws_chain.py in runner'; exit 97; fi
           python3 scripts/fix_test_bylaws_chain.py wine-source
 
           # Rewrite the baked-in install prefix from the Termux CI path to the

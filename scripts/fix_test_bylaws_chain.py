@@ -96,6 +96,83 @@ def insert_after_anchor(text, marker, block, anchors):
     return text, False, False
 
 
+def find_function_block(text, start_idx):
+    brace = text.find("{", start_idx)
+    if brace < 0:
+        return -1, -1
+
+    depth = 0
+    i = brace
+    while i < len(text):
+        c = text[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                while end < len(text) and text[end] in " \t\r\n":
+                    end += 1
+                return start_idx, end
+        i += 1
+
+    return -1, -1
+
+
+def dedupe_function(text, signature):
+    starts = []
+    pos = 0
+    while True:
+        idx = text.find(signature, pos)
+        if idx < 0:
+            break
+        starts.append(idx)
+        pos = idx + len(signature)
+
+    if len(starts) <= 1:
+        return text, 0
+
+    removed = 0
+    # Keep first definition, remove later duplicates.
+    for s in reversed(starts[1:]):
+        b0, b1 = find_function_block(text, s)
+        if b0 >= 0 and b1 > b0:
+            text = text[:b0] + text[b1:]
+            removed += 1
+
+    return text, removed
+
+
+def normalize_signal_duplicates(wine_src):
+    notes = []
+    files = [
+        "dlls/ntdll/signal_arm64.c",
+        "dlls/ntdll/signal_arm64ec.c",
+        "dlls/ntdll/signal_x86_64.c",
+    ]
+    signatures = [
+        "static void suspend_remote_breakin( HANDLE thread )",
+        "NTSTATUS WINAPI RtlWow64SuspendThread( HANDLE thread, ULONG *count )",
+    ]
+
+    for rel in files:
+        path = os.path.join(wine_src, rel)
+        if not os.path.exists(path):
+            continue
+
+        txt = read_text(path)
+        total = 0
+        for sig in signatures:
+            txt, n = dedupe_function(txt, sig)
+            total += n
+
+        if total:
+            write_text(path, txt)
+            notes.append(f"FIXED: {rel} removed {total} duplicate suspend definition(s)")
+
+    return notes
+
+
 def try_apply_patch(wine_src, patch_path):
     attempts = [
         ["git", "-C", wine_src, "apply", "--ignore-whitespace", "-C1", patch_path],
@@ -128,23 +205,21 @@ def fallback_fix_winternl(wine_src):
     txt = read_text(path)
     notes = []
 
-    # Ensure bypass freeze flag exists with current bit layout.
     if "THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE" not in txt:
         old = "#define THREAD_CREATE_FLAGS_SKIP_LOADER_INIT      0x00000100"
         new = (
             "#define THREAD_CREATE_FLAGS_SKIP_LOADER_INIT      0x00000100\n"
             "#define THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE 0x00000400"
         )
-        txt2, ok, changed = apply_once(txt, old, new)
+        txt2, ok, _ = apply_once(txt, old, new)
         if ok:
             txt = txt2
             notes.append(f"FIXED: {rel} add BYPASS_PROCESS_FREEZE define")
         else:
             notes.append(f"WARN: {rel} could not place BYPASS_PROCESS_FREEZE define")
 
-    # Ensure RtlWow64SuspendThread prototype exists.
     if "RtlWow64SuspendThread" not in txt:
-        txt2, ok, changed = insert_after_anchor(
+        txt2, ok, _ = insert_after_anchor(
             txt,
             "RtlWow64SuspendThread",
             "NTSTATUS    WINAPI RtlWow64SuspendThread(HANDLE, PULONG);\n",
@@ -172,11 +247,7 @@ def fallback_fix_signal_file(wine_src, rel):
     notes = []
 
     if "RtlWow64SuspendThread" not in txt:
-        txt2, ok, changed = apply_once(
-            txt,
-            "NtSuspendThread(",
-            "RtlWow64SuspendThread(",
-        )
+        txt2, ok, _ = apply_once(txt, "NtSuspendThread(", "RtlWow64SuspendThread(")
         if ok:
             txt = txt2
             notes.append(f"FIXED: {rel} swap NtSuspendThread -> RtlWow64SuspendThread")
@@ -287,6 +358,10 @@ def main():
         print("Applying drift fallbacks for failed patches...")
         for n in apply_fallbacks(wine_src, set(failed)):
             print(f"  {n}")
+
+    # Always normalize duplicate definitions left by fuzzy/partial patch application.
+    for n in normalize_signal_duplicates(wine_src):
+        print(f"  {n}")
 
     verified = verify(wine_src)
 
