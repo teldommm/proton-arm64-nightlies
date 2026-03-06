@@ -65,6 +65,7 @@ jobs:
 
       - name: Clone Wine source (ValveSoftware bleeding-edge)
         run: |
+          rm -rf wine-source
           git clone --depth=1 --branch bleeding-edge \
             https://github.com/ValveSoftware/wine wine-source
 
@@ -192,7 +193,8 @@ jobs:
 
           mkdir -p "$OUTPUT_DIR/bin" "$OUTPUT_DIR/lib" "$OUTPUT_DIR/share" "$STAGING"
 
-          make -C wine-source install DESTDIR="$STAGING" -j$(nproc)
+          cd wine-source
+          make install DESTDIR="$STAGING" -j$(nproc)
 
           STAGED="$STAGING$INSTALL_PREFIX"
           if [ ! -d "$STAGED" ]; then
