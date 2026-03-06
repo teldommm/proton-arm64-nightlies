@@ -74,7 +74,9 @@ jobs:
           # bleeding-edge). Rewrite the apply command to use reduced context (-C1) and
           # --ignore-whitespace so line-number shifts don't cause failures, then skip
           # any patch that still can't apply rather than aborting the whole build.
-          sed -i 's|git apply \./android/patches/\$patch|git apply --ignore-whitespace -C1 ./android/patches/$patch 2>/dev/null || echo "SKIP: $patch did not apply cleanly (patch skipped)"|g' \
+          # Make git apply forgiving: skip patches that don't apply cleanly to
+          # bleeding-edge instead of aborting the whole configure step.
+          python3 scripts/patch_build_script.py \
             wine-source/build-scripts/build-step-arm64ec.sh
 
       - name: Download and extract termuxfs for aarch64
