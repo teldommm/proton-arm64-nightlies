@@ -1,33 +1,23 @@
 #!/usr/bin/env python3
 """
-Surgically wraps xinput2-dependent code in dlls/winex11.drv/window.c
-with #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H guards.
+Applies Android-specific changes to dlls/winex11.drv/window.c that cannot
+be applied via patch due to line-number drift against bleeding-edge.
 
-Handles cases where patch hunk offsets drift against bleeding-edge and
-git apply fails to insert the guards, causing compile errors when building
-for Android (which lacks XInput2 headers).
+Changes applied:
+1. Wrap x11drv_xinput2_enable calls with #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+2. Add #ifdef __ANDROID__ branch for class_hints->res_name/res_class in set_initial_wm_hints
+3. Guard _NET_WM_PID/XdndAware block with #ifndef __ANDROID__ in set_initial_wm_hints
+4. Add _NET_WM_PID via NtUserGetWindowThread in set_net_active_window (Android only)
 
 Usage: fix_window_c.py <wine-source-dir>
 """
 import sys
 import os
+import re
 
 
-IFDEF = "#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H"
-ENDIF = "#endif"
-
-
-def prev_nonblank(lines, idx):
-    """Return the stripped content of the nearest non-blank line before idx."""
-    for j in range(idx - 1, -1, -1):
-        s = lines[j].strip()
-        if s:
-            return s
-    return ""
-
-
-def is_guarded(lines, idx):
-    """Return True if line idx is already inside a HAVE_X11_EXTENSIONS_XINPUT2_H block."""
+def is_guarded_xinput2(lines, idx):
+    """Return True if line at idx is already inside HAVE_X11_EXTENSIONS_XINPUT2_H."""
     depth = 0
     for j in range(idx - 1, -1, -1):
         s = lines[j].strip()
@@ -35,9 +25,169 @@ def is_guarded(lines, idx):
             depth += 1
         elif s.startswith("#ifdef") or s.startswith("#if "):
             if depth == 0:
-                return IFDEF.strip() in s
+                return "HAVE_X11_EXTENSIONS_XINPUT2_H" in s
             depth -= 1
     return False
+
+
+def apply_xinput2_guards(lines):
+    """Wrap bare x11drv_xinput2_enable calls with #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H."""
+    result = []
+    changes = 0
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if "x11drv_xinput2_enable" in line:
+            if not is_guarded_xinput2(result + [line], len(result)):
+                result.append("#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H\n")
+                result.append(line)
+                result.append("#endif\n")
+                changes += 1
+                print(f"  [xinput2 guard] {line.rstrip()}")
+                i += 1
+                continue
+        result.append(line)
+        i += 1
+    return result, changes
+
+
+def apply_android_class_hints(lines):
+    """
+    In set_initial_wm_hints, replace the class_hints block:
+      class_hints->res_name = steam_proton / proton_app_class;
+      class_hints->res_class = steam_proton / proton_app_class;
+    with an #ifdef __ANDROID__ branch that sets process_name,
+    and an #else branch with the original steam_proton logic.
+    """
+    src = "".join(lines)
+
+    # Already patched?
+    if "#ifdef __ANDROID__" in src and "process_name" in src:
+        print("  [android class_hints] already applied, skipping")
+        return lines, 0
+
+    # Match the class_hints block inside set_initial_wm_hints
+    # Pattern: if ((class_hints = XAllocClassHint())) { ... XSetClassHint ... XFree ... }
+    pattern = re.compile(
+        r'(    if \(\(class_hints = XAllocClassHint\(\)\)\)\n'
+        r'    \{\n)'
+        r'(        static char steam_proton\[\].*?'
+        r'        XSetClassHint\( display, window, class_hints \);\n'
+        r'        XFree\( class_hints \);\n'
+        r'    \}\n)',
+        re.DOTALL
+    )
+
+    android_block = (
+        '    if ((class_hints = XAllocClassHint()))\n'
+        '    {\n'
+        '#ifdef __ANDROID__\n'
+        '        class_hints->res_name = process_name;\n'
+        '        class_hints->res_class = process_name;\n'
+        '#else\n'
+    )
+
+    def replacer(m):
+        inner = m.group(2)
+        # Strip the opening "    {\n" that's now in android_block
+        inner_body = inner[len("    {\n"):]
+        # Close the #else before XSetClassHint
+        # inner_body ends with "        XSetClassHint...\n        XFree...\n    }\n"
+        # Insert #endif before XSetClassHint
+        inner_body = inner_body.replace(
+            "        XSetClassHint( display, window, class_hints );\n",
+            "#endif\n        XSetClassHint( display, window, class_hints );\n",
+            1
+        )
+        return android_block + inner_body
+
+    new_src, n = pattern.subn(replacer, src)
+    if n == 0:
+        print("  [android class_hints] pattern not found, skipping")
+        return lines, 0
+
+    print(f"  [android class_hints] applied Android #ifdef to class_hints block")
+    return new_src.splitlines(keepends=True), n
+
+
+def apply_android_net_wm_pid(lines):
+    """
+    In set_initial_wm_hints, guard the _NET_WM_PID + XdndAware block
+    with #ifndef __ANDROID__ ... #endif.
+    """
+    src = "".join(lines)
+
+    if "#ifndef __ANDROID__" in src and "_NET_WM_PID" in src:
+        print("  [android _NET_WM_PID] already applied, skipping")
+        return lines, 0
+
+    # Match: XSetWMProperties call, then getpid block, then XdndAware
+    pattern = re.compile(
+        r'(    XSetWMProperties\(display, window, NULL, NULL, NULL, 0, NULL, NULL, NULL\);\n)'
+        r'(    /\* set the pid.*?'
+        r'    XChangeProperty\( display, window, x11drv_atom\(XdndAware\),\n'
+        r'                     XA_ATOM, 32, PropModeReplace, \(unsigned char\*\)&dndVersion, 1 \);\n)',
+        re.DOTALL
+    )
+
+    def replacer(m):
+        return (
+            m.group(1) +
+            "#ifndef __ANDROID__\n" +
+            m.group(2) +
+            "#endif\n"
+        )
+
+    new_src, n = pattern.subn(replacer, src)
+    if n == 0:
+        print("  [android _NET_WM_PID] pattern not found, skipping")
+        return lines, 0
+
+    print("  [android _NET_WM_PID] guarded _NET_WM_PID/XdndAware with #ifndef __ANDROID__")
+    return new_src.splitlines(keepends=True), n
+
+
+def apply_android_set_net_active_window(lines):
+    """
+    In set_net_active_window, add Android-only _NET_WM_PID update via
+    NtUserGetWindowThread after the XFlush call.
+    """
+    src = "".join(lines)
+
+    if "NtUserGetWindowThread" in src and "set_net_active_window" in src:
+        print("  [android set_net_active] already applied, skipping")
+        return lines, 0
+
+    android_addition = (
+        "\n#ifdef __ANDROID__\n"
+        "    DWORD pid = 0;\n"
+        "\n"
+        "    NtUserGetWindowThread( hwnd, &pid );\n"
+        "\n"
+        "    XChangeProperty(data->display, window, x11drv_atom(_NET_WM_PID),\n"
+        "                    XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&pid, 1);\n"
+        "#endif\n"
+    )
+
+    # Match the end of set_net_active_window: XFlush then closing brace
+    pattern = re.compile(
+        r'(    XFlush\( data->display \);\n)'
+        r'(\})\n'
+        r'\n'
+        r'(BOOL window_has_pending_wm_state)',
+        re.DOTALL
+    )
+
+    def replacer(m):
+        return m.group(1) + android_addition + m.group(2) + "\n\n" + m.group(3)
+
+    new_src, n = pattern.subn(replacer, src)
+    if n == 0:
+        print("  [android set_net_active] pattern not found, skipping")
+        return lines, 0
+
+    print("  [android set_net_active] added Android _NET_WM_PID to set_net_active_window")
+    return new_src.splitlines(keepends=True), n
 
 
 def main():
@@ -55,50 +205,24 @@ def main():
     with open(window_c) as f:
         lines = f.readlines()
 
-    result = []
-    changes = 0
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        needs_guard = False
+    total = 0
 
-        # Check for bare xinput2_rawinput assignment
-        if "data->xinput2_rawinput" in line and "=" in line:
-            if not is_guarded(result + [line], len(result)):
-                needs_guard = True
+    lines, n = apply_xinput2_guards(lines)
+    total += n
 
-        # Check for bare x11drv_xinput2_enable call
-        if "x11drv_xinput2_enable" in line and not needs_guard:
-            if not is_guarded(result + [line], len(result)):
-                needs_guard = True
+    lines, n = apply_android_class_hints(lines)
+    total += n
 
-        if needs_guard:
-            # Collect consecutive xinput2 lines to wrap together
-            block = [line]
-            j = i + 1
-            while j < len(lines):
-                next_line = lines[j]
-                if ("x11drv_xinput2_enable" in next_line or
-                        "data->xinput2_rawinput" in next_line):
-                    block.append(next_line)
-                    j += 1
-                else:
-                    break
-            result.append(IFDEF + "\n")
-            result.extend(block)
-            result.append(ENDIF + "\n")
-            changes += 1
-            for b in block:
-                print(f"  Added guard around: {b.rstrip()}")
-            i = j
-        else:
-            result.append(line)
-            i += 1
+    lines, n = apply_android_net_wm_pid(lines)
+    total += n
+
+    lines, n = apply_android_set_net_active_window(lines)
+    total += n
 
     with open(window_c, "w") as f:
-        f.writelines(result)
+        f.writelines(lines)
 
-    print(f"\nDone. Applied {changes} xinput2 guard fix(es) to window.c")
+    print(f"\nDone. Applied {total} fix(es) to window.c")
 
 
 if __name__ == "__main__":

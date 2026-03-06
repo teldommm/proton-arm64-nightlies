@@ -66,16 +66,8 @@ jobs:
           cp -r gamenative-src/build-scripts wine-source/build-scripts
           rm -rf gamenative-src
 
-          # Override GameNative's window.c patch with one rebased against bleeding-edge.
-          cp patches/dlls_winex11_drv_window_c.patch \
-            wine-source/android/patches/dlls_winex11_drv_window_c.patch
-
-          # GameNative's patches were written against proton_10.0 (~590 commits behind
-          # bleeding-edge). Rewrite the apply command to use reduced context (-C1) and
-          # --ignore-whitespace so line-number shifts don't cause failures, then skip
-          # any patch that still can't apply rather than aborting the whole build.
-          # Comment out patches already merged into bleeding-edge so they don't
-          # get double-applied and cause compile errors.
+          # Comment out patches already merged into bleeding-edge (or handled by
+          # fix_*.py scripts) so they don't get double-applied or fail the build.
           python3 scripts/filter_patches.py \
             wine-source/build-scripts/build-step-arm64ec.sh \
             wine-source
@@ -85,8 +77,13 @@ jobs:
           python3 scripts/patch_build_script.py \
             wine-source/build-scripts/build-step-arm64ec.sh
 
-          # Fix any xinput2 guard issues that survive patch offset drift.
+          # Apply Android-specific window.c changes (xinput2 guards, class_hints,
+          # _NET_WM_PID) via script — the patch is too drifted to apply cleanly.
           python3 scripts/fix_window_c.py wine-source
+
+          # Apply Wow64SuspendLocalThread to wow64/process.c — the upstream patch
+          # is corrupt (CRLF issue), so we add the function directly.
+          python3 scripts/fix_wow64_process_c.py wine-source
 
       - name: Download and extract termuxfs for aarch64
         run: |
