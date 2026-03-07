@@ -31,14 +31,6 @@ on:
         required: false
         default: 'proton_10.0'
         type: string
-      ge_patch_mode:
-        description: 'Apply curated GE donor patch pack'
-        required: false
-        default: 'firstpass'
-        type: choice
-        options:
-          - 'firstpass'
-          - 'off'
       kernel_compat_wcp_url:
         description: 'Optional URL to known-good donor .wcp for kernel32/ntdll overlay'
         required: false
@@ -162,47 +154,9 @@ jobs:
           # Force-apply additional BYLAWS drift-prone patches and verify markers.
           echo "=== fix_test_bylaws_chain.py header ==="
           sed -n '1,40p' scripts/fix_test_bylaws_chain.py
-          if ! grep -q 'Script rev: 2026-03-06-driftproof-v1' scripts/fix_test_bylaws_chain.py; then echo 'ERROR: stale fix_test_bylaws_chain.py in runner'; exit 97; fi
+          if ! grep -q 'Script rev: 2026-03-07-driftproof-v2' scripts/fix_test_bylaws_chain.py; then echo 'ERROR: stale fix_test_bylaws_chain.py in runner'; exit 97; fi
           python3 scripts/fix_test_bylaws_chain.py wine-source
 
-          GE_PATCH_MODE="${{ github.event.inputs.ge_patch_mode || 'firstpass' }}"
-          if [ "$GE_PATCH_MODE" = "firstpass" ]; then
-            echo "Applying GE donor first-pass patch pack..."
-            GE_PATCH_ROOT="$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass"
-            if [ ! -d "$GE_PATCH_ROOT" ]; then
-              echo "ERROR: missing GE patch root: $GE_PATCH_ROOT"
-              exit 1
-            fi
-
-            GE_PATCHES=(
-              "proton/fix-a-crash-in-ID2D1DeviceContext-if-no-target-is-set.patch"
-              "proton/0001-win32u-add-env-switch-to-disable-wm-decorations.patch"
-              "proton/83-nv_low_latency_wine.patch"
-              "wine-hotfixes/pending/unity_crash_hotfix.patch"
-              "wine-hotfixes/pending/registry_RRF_RT_REG_SZ-RRF_RT_REG_EXPAND_SZ.patch"
-              "wine-hotfixes/pending/ntdll_add_wine_disable_sfn.patch"
-              "wine-hotfixes/pending/NCryptDecrypt_implementation.patch"
-              "wine-hotfixes/pending/webview2.patch"
-              "wine-hotfixes/staging/cryptext-CryptExtOpenCER/0001.patch"
-              "wine-hotfixes/staging/wineboot-ProxySettings/0001.patch"
-              "proton/0001-fshack-Implement-AMD-FSR-upscaler-for-fullscreen-hac.patch"
-            )
-
-            for rel in "${GE_PATCHES[@]}"; do
-              patch="$GE_PATCH_ROOT/$rel"
-              echo "GE PATCH: $rel"
-              if ! git -C wine-source apply --ignore-whitespace -C1 "$patch"; then
-                if git -C wine-source apply --ignore-whitespace -C1 -R --check "$patch" 2>/dev/null; then
-                  echo "GE PATCH already present: $rel"
-                else
-                  echo "ERROR: GE donor patch failed: $rel"
-                  exit 1
-                fi
-              fi
-            done
-          else
-            echo "GE donor patch pack disabled"
-          fi
 
           # Rewrite the baked-in install prefix from the Termux CI path to the
           # Winlator Cmod path that GameNative rewrites at runtime via libredirect.

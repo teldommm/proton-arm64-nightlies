@@ -4,7 +4,7 @@ Apply and verify additional BYLAWS patch chain pieces that commonly drift on
 bleeding-edge and can cause runtime hangs if partially missing.
 
 Usage: fix_test_bylaws_chain.py <wine-source-dir>
-Script rev: 2026-03-06-driftproof-v1
+Script rev: 2026-03-07-driftproof-v2
 """
 import os
 import subprocess
@@ -20,6 +20,7 @@ PATCHES = [
     "dlls_ntdll_signal_x86_64_c.patch",
     "dlls_wow64_syscall_c.patch",
     "dlls_wow64_wow64_spec.patch",
+    "include_winnt_h.patch",
     "include_winternl_h.patch",
     "tools_makedep_c.patch",
 ]
@@ -50,6 +51,10 @@ REQUIRED_MARKERS = {
     ],
     "dlls/wow64/wow64.spec": [
         "Wow64SuspendLocalThread",
+    ],
+    "include/winnt.h": [
+        "CONTEXT_ARM64_FEX_YMMSTATE",
+        "XSTATE_ARM64_SVE",
     ],
     "include/winternl.h": [
         "THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE",
@@ -208,6 +213,47 @@ def try_apply_patch(wine_src, patch_path):
     return False, out
 
 
+def fallback_fix_winnt(wine_src):
+    rel = "include/winnt.h"
+    path = os.path.join(wine_src, rel)
+    if not os.path.exists(path):
+        return [f"MISSING: {rel}"]
+
+    txt = read_text(path)
+    notes = []
+
+    if "XSTATE_ARM64_SVE" not in txt:
+        old = "#define CONTEXT_ARM64_X18"
+        new = (
+            "#define XSTATE_ARM64_SVE 2\n"
+            "#define XSTATE_MASK_ARM64_SVE (1 << XSTATE_ARM64_SVE)\n\n"
+            "#define CONTEXT_ARM64_X18"
+        )
+        txt2, ok, _ = apply_once(txt, old, new)
+        if ok:
+            txt = txt2
+            notes.append(f"FIXED: {rel} add XSTATE_ARM64_SVE defines")
+        else:
+            notes.append(f"WARN: {rel} could not place XSTATE_ARM64_SVE defines")
+
+    if "CONTEXT_ARM64_FEX_YMMSTATE" not in txt:
+        old = "#define CONTEXT_ARM64_X18       (CONTEXT_ARM64 | 0x00000010)"
+        new = (
+            "#define CONTEXT_ARM64_X18       (CONTEXT_ARM64 | 0x00000010)\n"
+            "#define CONTEXT_ARM64_XSTATE    (CONTEXT_ARM64 | 0x00000020)\n"
+            "#define CONTEXT_ARM64_FEX_YMMSTATE   (CONTEXT_ARM64 | 0x00000040)"
+        )
+        txt2, ok, _ = apply_once(txt, old, new)
+        if ok:
+            txt = txt2
+            notes.append(f"FIXED: {rel} add CONTEXT_ARM64_FEX_YMMSTATE define")
+        else:
+            notes.append(f"WARN: {rel} could not place CONTEXT_ARM64_FEX_YMMSTATE define")
+
+    write_text(path, txt)
+    return notes
+
+
 def fallback_fix_winternl(wine_src):
     rel = "include/winternl.h"
     path = os.path.join(wine_src, rel)
@@ -299,6 +345,9 @@ def fallback_fix_wow64_syscall(wine_src):
 def apply_fallbacks(wine_src, failed_patch_names):
     notes = []
 
+    if "include_winnt_h.patch" in failed_patch_names:
+        notes.extend(fallback_fix_winnt(wine_src))
+
     if "include_winternl_h.patch" in failed_patch_names:
         notes.extend(fallback_fix_winternl(wine_src))
 
@@ -341,7 +390,7 @@ def main():
         return 1
 
     wine_src = os.path.abspath(sys.argv[1])
-    print(f"fix_test_bylaws_chain: rev=2026-03-06-driftproof-v1 wine_src={wine_src}")
+    print(f"fix_test_bylaws_chain: rev=2026-03-07-driftproof-v2 wine_src={wine_src}")
     patch_dir = os.path.join(wine_src, "android", "patches", "test-bylaws")
 
     if not os.path.isdir(patch_dir):
