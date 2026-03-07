@@ -45,14 +45,6 @@ jobs:
       contents: write
 
     steps:
-      - name: Free up disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          df -h
-
       - name: Checkout this repo
         uses: actions/checkout@v4
 
@@ -91,6 +83,15 @@ jobs:
       - name: Stop early when upstream is unchanged
         if: steps.upstream_check.outputs.skip_build == 'true'
         run: echo "Skipping build: upstream bleeding-edge HEAD matches latest.json"
+
+      - name: Free up disk space
+        if: steps.upstream_check.outputs.skip_build != 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h
 
       - name: Set up build environment
         if: steps.upstream_check.outputs.skip_build != 'true'
@@ -167,6 +168,7 @@ jobs:
 
           # Comment out patches already merged into bleeding-edge (or handled by
           # fix_*.py scripts) so they don't get double-applied or fail the build.
+          python3 scripts/filter_patches.py \
             wine-source/build-scripts/build-step-arm64ec.sh \
             wine-source
 
@@ -286,8 +288,8 @@ jobs:
           restore-keys: wine-tools-
 
       - name: Build wine-tools
-        if: steps.upstream_check.outputs.skip_build != 'true'
         if: steps.upstream_check.outputs.skip_build != 'true' && steps.cache-wine-tools.outputs.cache-hit != 'true'
+        run: |
           cd wine-source
           mkdir -p wine-tools
           cd wine-tools
@@ -429,33 +431,34 @@ jobs:
           echo "should_release=$SHOULD_RELEASE"
 
       - name: Upload artifacts
-        if: steps.upstream_check.outputs.skip_build != 'true'
         if: steps.upstream_check.outputs.skip_build != 'true' && steps.detect_changes.outputs.should_release == 'true'
+        uses: actions/upload-artifact@v4
         with:
           name: proton-arm64-nightly
           path: output/
           retention-days: 30
 
       - name: Create GitHub Release
-        if: steps.upstream_check.outputs.skip_build != 'true'
-        if: steps.detect_changes.outputs.should_release == 'true'
-        run: |
         if: steps.upstream_check.outputs.skip_build != 'true' && steps.detect_changes.outputs.should_release == 'true'
+        run: |
+          GIT_HASH="${{ steps.detect_changes.outputs.git_hash }}"
+          GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
           VERSION="${{ steps.detect_changes.outputs.version }}"
           TAG="${{ steps.detect_changes.outputs.release_tag }}"
           gh release create "$TAG" output/* \
             --title "Proton bleeding-edge ARM64 (${GIT_DATE})" \
             --notes "Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android + ARM64EC patches. Automated bleeding-edge build ? use at your own risk." \
             --prerelease \
-        if: steps.upstream_check.outputs.skip_build != 'true' && steps.detect_changes.outputs.should_release == 'true'
+            || gh release upload "$TAG" output/* --clobber
+        env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update latest.json
-        if: steps.upstream_check.outputs.skip_build != 'true'
-        if: steps.detect_changes.outputs.should_release == 'true'
+        if: steps.upstream_check.outputs.skip_build != 'true' && steps.detect_changes.outputs.should_release == 'true'
         run: |
           GIT_HASH="${{ steps.detect_changes.outputs.git_hash }}"
-        if: steps.upstream_check.outputs.skip_build != 'true' && steps.detect_changes.outputs.should_release == 'true'
+          GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
+          VERSION="${{ steps.detect_changes.outputs.version }}"
           WCP_SHA="${{ steps.detect_changes.outputs.wcp_sha }}"
           WCPXZ_SHA="${{ steps.detect_changes.outputs.wcpxz_sha }}"
           python3 scripts/generate_latest.py \
@@ -471,8 +474,7 @@ jobs:
           cat latest.json
 
       - name: Commit latest.json
-        if: steps.upstream_check.outputs.skip_build != 'true'
-        if: steps.detect_changes.outputs.should_release == 'true'
+        if: steps.upstream_check.outputs.skip_build != 'true' && steps.detect_changes.outputs.should_release == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -481,7 +483,6 @@ jobs:
           git diff --staged --quiet || git commit -m "chore: update latest.json for bleeding-edge ${GIT_DATE}"
           git pull --rebase origin HEAD
           git push
-
 
 
 
