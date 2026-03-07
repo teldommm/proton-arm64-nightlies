@@ -31,6 +31,14 @@ on:
         required: false
         default: 'proton_10.0'
         type: string
+      kernel_compat_enabled:
+        description: 'Apply kernel32/ntdll compatibility overlay'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
       kernel_compat_wcp_url:
         description: 'Optional URL to known-good donor .wcp for kernel32/ntdll overlay'
         required: false
@@ -168,16 +176,14 @@ jobs:
 
 
           # Rewrite the baked-in install prefix from the Termux CI path to the
-          # Winlator Cmod path that GameNative rewrites at runtime via libredirect.
-          # This ensures Wine's hardcoded WINEDLLPATH points somewhere the device can find.
-          # Always use com.winlator.cmod/usr/../opt/wine — this matches the pattern
-          # in the reference GameNative WCP binary (build-step-arm64ec.sh uses
-          # install_dir=$deps/../opt/wine where deps ends in .../usr).
-          # libredirect rewrites com.winlator.cmod → app.gamenative at runtime.
-          # The usr/../opt/wine pattern means Wine's WINEDLLPATH resolves to
-          # RUNTIME_PATH/../opt/wine/lib = /opt/wine/lib after the rewrite.
-          INSTALL_DIR="/data/data/com.winlator.cmod/files/imagefs/usr/../opt/wine"
-          # RUNTIME_PATH is baked into wine's ELF RUNPATH via -Wl,-rpath=
+          # actual custom Proton install directory used by GameNative imports.
+          # This workflow packages type=Proton with versionName=bleeding-edge-arm64ec,
+          # which GameNative normalizes to /opt/proton-bleeding-edge-arm64ec on-device.
+          # If Wine is built against /opt/wine instead, builtin DLL resolution points at
+          # the wrong tree after import and startup dies during kernel32 initialization.
+          # libredirect still rewrites com.winlator.cmod -> app.gamenative at runtime.
+          INSTALL_DIR="/data/data/com.winlator.cmod/files/imagefs/opt/proton-bleeding-edge-arm64ec"
+          # RUNTIME_PATH is baked into wine's ELF RUNPATH via -Wl,-rpath=.
           # It must point somewhere libredirect can rewrite, not com.termux.
           # Use com.winlator.cmod path so libredirect's rewrite rule applies.
           RUNTIME_PATH="/data/data/com.winlator.cmod/files/imagefs/usr"
@@ -278,7 +284,7 @@ jobs:
           # $install_dir = /data/data/com.winlator.cmod/files/imagefs/opt/wine
           # which doesn't exist on a hosted runner. Pre-create it with sudo so
           # make install can write there, then let the script copy to OUTPUT_DIR.
-          sudo mkdir -p /data/data/com.winlator.cmod/files/imagefs/opt/wine
+          sudo mkdir -p /data/data/com.winlator.cmod/files/imagefs/opt/proton-bleeding-edge-arm64ec
           sudo chmod -R 777 /data/data
 
           cd wine-source
@@ -298,8 +304,14 @@ jobs:
 
       - name: Apply kernel32 compatibility overlay (optional)
         run: |
+          ENABLED="${{ github.event.inputs.kernel_compat_enabled || 'true' }}"
           COMPAT_URL="${{ github.event.inputs.kernel_compat_wcp_url || '' }}"
           REQUIRED="${{ github.event.inputs.kernel_compat_required || 'false' }}"
+
+          if [ "$ENABLED" != "true" ]; then
+            echo "kernel compatibility overlay disabled"
+            exit 0
+          fi
 
           WORK_DIR="$HOME/kernel-compat-donor"
           rm -rf "$WORK_DIR"
@@ -331,7 +343,7 @@ jobs:
           OUTPUT_DIR="$HOME/compiled-files-aarch64"
           GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
           GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
-          VERSION="proton-10.0-nightly-${GIT_DATE}-${GIT_HASH}-arm64ec"
+          VERSION="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-arm64ec"
 
           mkdir -p "$GITHUB_WORKSPACE/output"
 
@@ -339,7 +351,7 @@ jobs:
           # Use a nightly-specific name so it doesn't collide with stable "10.0-4-arm64ec".
           # Both Proton and Wine profiles use "wine" as the paths key (confirmed from
           # GameNative/proton-wine build-proton.yml). Proton versionCode=1, Wine versionCode=0.
-          PROFILE_VERSION="10.0-nightly-arm64ec"
+          PROFILE_VERSION="bleeding-edge-arm64ec"
           PROTON_VERSION_CODE=1
           WINE_VERSION_CODE=0
 
@@ -348,21 +360,21 @@ jobs:
             "${OUTPUT_DIR}/profile.json" \
             "${PROFILE_VERSION}" \
             "${PROTON_VERSION_CODE}" \
-            "Proton 10 ARM64 nightly ${GIT_DATE} (${GIT_HASH})"
+            "Proton bleeding-edge ARM64 ${GIT_DATE} (${GIT_HASH})"
 
           bash "$GITHUB_WORKSPACE/scripts/create-proton-wcp.sh" \
             "$OUTPUT_DIR" \
             "$GITHUB_WORKSPACE/output/proton-${VERSION}.wcp" \
             "${PROFILE_VERSION}" \
             "${PROTON_VERSION_CODE}" \
-            "Proton 10 ARM64 nightly ${GIT_DATE} (${GIT_HASH})"
+            "Proton bleeding-edge ARM64 ${GIT_DATE} (${GIT_HASH})"
 
           # Wine profile - for Winlator CMOD / Ludashi (XZ-compressed, .wcp.xz extension)
           python3 "$GITHUB_WORKSPACE/scripts/generate_profile.py" \
             "${OUTPUT_DIR}/profile.json" \
             "${PROFILE_VERSION}" \
             "${WINE_VERSION_CODE}" \
-            "Proton 10 ARM64 nightly ${GIT_DATE} (${GIT_HASH})" \
+            "Proton bleeding-edge ARM64 ${GIT_DATE} (${GIT_HASH})" \
             wine
 
           cd "$OUTPUT_DIR"
@@ -386,11 +398,11 @@ jobs:
         run: |
           GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
           GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
-          VERSION="proton-10.0-nightly-${GIT_DATE}-${GIT_HASH}-arm64ec"
-          TAG="nightly-${GIT_DATE}-${GIT_HASH}"
+          VERSION="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-arm64ec"
+          TAG="bleeding-edge-${GIT_DATE}-${GIT_HASH}"
           gh release create "$TAG" output/* \
-            --title "Proton 10 ARM64 Nightly (${GIT_DATE})" \
-            --notes "Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android + ARM64EC patches. Automated nightly ? use at your own risk." \
+            --title "Proton bleeding-edge ARM64 (${GIT_DATE})" \
+            --notes "Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android + ARM64EC patches. Automated bleeding-edge build ? use at your own risk." \
             --prerelease \
             || gh release upload "$TAG" output/* --clobber
         env:
@@ -400,7 +412,7 @@ jobs:
         run: |
           GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
           GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
-          VERSION="proton-10.0-nightly-${GIT_DATE}-${GIT_HASH}-arm64ec"
+          VERSION="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-arm64ec"
           WCP_SHA=$(cut -d' ' -f1 output/proton-${VERSION}.wcp.sha256)
           WCPXZ_SHA=$(cut -d' ' -f1 output/proton-wine-${VERSION}.wcp.xz.sha256)
           python3 scripts/generate_latest.py \
@@ -412,7 +424,7 @@ jobs:
             "${WCP_SHA}" \
             "proton-wine-${VERSION}.wcp.xz" \
             "${WCPXZ_SHA}" \
-            "nightly-${GIT_DATE}-${GIT_HASH}"
+            "bleeding-edge-${GIT_DATE}-${GIT_HASH}"
           cat latest.json
 
       - name: Commit latest.json
@@ -421,7 +433,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add latest.json
           GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
-          git diff --staged --quiet || git commit -m "chore: update latest.json for nightly ${GIT_DATE}"
+          git diff --staged --quiet || git commit -m "chore: update latest.json for bleeding-edge ${GIT_DATE}"
           git pull --rebase origin HEAD
           git push
 
@@ -450,4 +462,5 @@ jobs:
           rm -rf "$RUNNER_TEMP"/* || true
           echo "=== Disk usage after cleanup ==="
           df -h
+
 
