@@ -20,7 +20,7 @@ Each build includes:
 - ARM64 and 32-bit (WoW64) PE DLLs
 - A default Wine prefix (`prefixPack.txz`) so things work out of the box
 
-There are two package formats per build:
+There are two package variants per build:
 
 | File | For |
 |------|-----|
