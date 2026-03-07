@@ -1,4 +1,4 @@
-name: Proton ARM64 Nightly Build
+name: Proton ARM64 Bleeding-Edge Build
 
 on:
   schedule:
@@ -332,8 +332,42 @@ jobs:
 
           ls -lh output/
 
+      - name: Detect release-worthy changes
+        id: detect_changes
+        run: |
+          GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
+          GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
+          VERSION="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-arm64ec"
+          RELEASE_TAG="bleeding-edge-${GIT_DATE}-${GIT_HASH}"
+          WCP_SHA=$(cut -d' ' -f1 output/proton-${VERSION}.wcp.sha256)
+          WCPXZ_SHA=$(cut -d' ' -f1 output/proton-wine-${VERSION}.wcp.xz.sha256)
+          PREV_GIT_HASH="$(python3 -c 'import json; d=json.load(open("latest.json")); print(d.get("gitHash",""))')"
+          PREV_WCP_SHA="$(python3 -c 'import json; d=json.load(open("latest.json")); print(d.get("wcp",{}).get("sha256",""))')"
+          PREV_WCPXZ_SHA="$(python3 -c 'import json; d=json.load(open("latest.json")); print(d.get("wcpxz",{}).get("sha256",""))')"
+
+          SHOULD_RELEASE=false
+          if [ "$GIT_HASH" != "$PREV_GIT_HASH" ] || [ "$WCP_SHA" != "$PREV_WCP_SHA" ] || [ "$WCPXZ_SHA" != "$PREV_WCPXZ_SHA" ]; then
+            SHOULD_RELEASE=true
+          fi
+
+          echo "git_hash=$GIT_HASH" >> "$GITHUB_OUTPUT"
+          echo "git_date=$GIT_DATE" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "wcp_sha=$WCP_SHA" >> "$GITHUB_OUTPUT"
+          echo "wcpxz_sha=$WCPXZ_SHA" >> "$GITHUB_OUTPUT"
+          echo "should_release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
+
+          echo "Previous gitHash: $PREV_GIT_HASH"
+          echo "Current  gitHash: $GIT_HASH"
+          echo "Previous wcp sha: $PREV_WCP_SHA"
+          echo "Current  wcp sha: $WCP_SHA"
+          echo "Previous wcpxz sha: $PREV_WCPXZ_SHA"
+          echo "Current  wcpxz sha: $WCPXZ_SHA"
+          echo "should_release=$SHOULD_RELEASE"
 
       - name: Upload artifacts
+        if: steps.detect_changes.outputs.should_release == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: proton-arm64-nightly
@@ -341,11 +375,12 @@ jobs:
           retention-days: 30
 
       - name: Create GitHub Release
+        if: steps.detect_changes.outputs.should_release == 'true'
         run: |
-          GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
-          GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
-          VERSION="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-arm64ec"
-          TAG="bleeding-edge-${GIT_DATE}-${GIT_HASH}"
+          GIT_HASH="${{ steps.detect_changes.outputs.git_hash }}"
+          GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
+          VERSION="${{ steps.detect_changes.outputs.version }}"
+          TAG="${{ steps.detect_changes.outputs.release_tag }}"
           gh release create "$TAG" output/* \
             --title "Proton bleeding-edge ARM64 (${GIT_DATE})" \
             --notes "Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android + ARM64EC patches. Automated bleeding-edge build ? use at your own risk." \
@@ -355,12 +390,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update latest.json
+        if: steps.detect_changes.outputs.should_release == 'true'
         run: |
-          GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
-          GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
-          VERSION="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-arm64ec"
-          WCP_SHA=$(cut -d' ' -f1 output/proton-${VERSION}.wcp.sha256)
-          WCPXZ_SHA=$(cut -d' ' -f1 output/proton-wine-${VERSION}.wcp.xz.sha256)
+          GIT_HASH="${{ steps.detect_changes.outputs.git_hash }}"
+          GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
+          VERSION="${{ steps.detect_changes.outputs.version }}"
+          WCP_SHA="${{ steps.detect_changes.outputs.wcp_sha }}"
+          WCPXZ_SHA="${{ steps.detect_changes.outputs.wcpxz_sha }}"
           python3 scripts/generate_latest.py \
             "latest.json" \
             "${VERSION}" \
@@ -370,15 +406,16 @@ jobs:
             "${WCP_SHA}" \
             "proton-wine-${VERSION}.wcp.xz" \
             "${WCPXZ_SHA}" \
-            "bleeding-edge-${GIT_DATE}-${GIT_HASH}"
+            "${{ steps.detect_changes.outputs.release_tag }}"
           cat latest.json
 
       - name: Commit latest.json
+        if: steps.detect_changes.outputs.should_release == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add latest.json
-          GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
+          GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
           git diff --staged --quiet || git commit -m "chore: update latest.json for bleeding-edge ${GIT_DATE}"
           git pull --rebase origin HEAD
           git push
@@ -408,6 +445,8 @@ jobs:
           rm -rf "$RUNNER_TEMP"/* || true
           echo "=== Disk usage after cleanup ==="
           df -h
+
+
 
 
 
