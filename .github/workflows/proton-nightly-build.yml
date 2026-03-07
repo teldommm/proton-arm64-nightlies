@@ -82,7 +82,8 @@ jobs:
 
       - name: Stop early when upstream is unchanged
         if: steps.upstream_check.outputs.skip_build == 'true'
-        run: echo "Skipping build: upstream bleeding-edge HEAD matches latest.json"
+        run: |
+          echo "Skipping build: upstream bleeding-edge HEAD matches latest.json"
 
       - name: Free up disk space
         if: steps.upstream_check.outputs.skip_build != 'true'
