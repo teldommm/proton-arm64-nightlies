@@ -24,7 +24,7 @@ on:
       wine_ref:
         description: 'Valve wine ref (branch/tag/commit)'
         required: false
-        default: 'proton_10.0'
+        default: 'bleeding-edge'
         type: string
       gamenative_ref:
         description: 'GameNative proton-wine ref (branch/tag/commit)'

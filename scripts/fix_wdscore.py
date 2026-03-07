@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
-import re
 import sys
+
 
 def main():
     if len(sys.argv) < 2:
@@ -18,64 +18,37 @@ def main():
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         lines = f.readlines()
 
-    # Strip mangled C++ CDynamicArray exports/stubs that break ARM64EC linking.
-    bad_patterns = [
-        re.compile(r"CDynamicArray"),
-        re.compile(r"\?\?"),      # MSVC-mangled C++ symbol
-        re.compile(r"@QAE@|@QBE@|@IAE@|@AAV|@ABV|@@QAE|@@QBE"),
-    ]
-
     kept = []
     removed = []
 
     for line in lines:
-        if "CDynamicArray" in line and (
-            "??" in line
-            or "@QAE@" in line
-            or "@QBE@" in line
-            or "@IAE@" in line
-            or "@AAV" in line
-            or "@ABV" in line
-            or "@@QAE" in line
-            or "@@QBE" in line
-        ):
+        # Match the upstream GameNative patch intent exactly: drop every
+        # wdscore.spec entry that exports a CDynamicArray template symbol.
+        if "CDynamicArray" in line:
             removed.append(line.rstrip("\n"))
             continue
         kept.append(line)
 
     if not removed:
-        print("OK: no ARM64EC-invalid CDynamicArray stubs found in wdscore.spec")
+        print("OK: no CDynamicArray exports found in wdscore.spec")
         return 0
 
     with open(path, "w", encoding="utf-8") as f:
         f.writelines(kept)
 
-    print(f"FIXED: removed {len(removed)} bad wdscore.spec lines")
+    print(f"FIXED: removed {len(removed)} wdscore.spec lines")
     for line in removed:
         print(f"  removed: {line}")
 
-    # Verify cleanup
-    remaining = []
-    for line in kept:
-        if "CDynamicArray" in line and (
-            "??" in line
-            or "@QAE@" in line
-            or "@QBE@" in line
-            or "@IAE@" in line
-            or "@AAV" in line
-            or "@ABV" in line
-            or "@@QAE" in line
-            or "@@QBE" in line
-        ):
-            remaining.append(line.rstrip("\n"))
-
+    remaining = [line.rstrip("\n") for line in kept if "CDynamicArray" in line]
     if remaining:
-        print("ERROR: wdscore.spec still contains bad CDynamicArray entries")
+        print("ERROR: wdscore.spec still contains CDynamicArray entries")
         for line in remaining:
             print(f"  remaining: {line}")
         return 2
 
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
