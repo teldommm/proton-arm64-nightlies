@@ -1,5 +1,5 @@
 diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
-index 6d59de4..ccbac76 100644
+index 6d59de4..2b498b8 100644
 --- a/dlls/winex11.drv/mouse.c
 +++ b/dlls/winex11.drv/mouse.c
 @@ -127,6 +127,8 @@ static const UINT button_up_data[NB_BUTTONS] =
@@ -33,7 +33,15 @@ index 6d59de4..ccbac76 100644
  #ifdef HAVE_X11_EXTENSIONS_XINPUT_H
  #define MAKE_FUNCPTR(f) static typeof(f) * p##f
  MAKE_FUNCPTR(XOpenDevice);
-@@ -478,10 +495,15 @@ static BOOL grab_clipping_window( const RECT *clip )
+@@ -459,7 +476,6 @@ void x11drv_xinput2_init( struct x11drv_thread_data *data )
+  */
+ static BOOL grab_clipping_window( const RECT *clip )
+ {
+-#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+     struct x11drv_thread_data *data = x11drv_thread_data();
+     Window clip_window;
+     HCURSOR cursor;
+@@ -478,10 +494,15 @@ static BOOL grab_clipping_window( const RECT *clip )
          WARN( "refusing to clip to %s\n", wine_dbgstr_rect(clip) );
          return FALSE;
      }
@@ -51,7 +59,7 @@ index 6d59de4..ccbac76 100644
          return TRUE;
      }
  
-@@ -525,10 +547,6 @@ static BOOL grab_clipping_window( const RECT *clip )
+@@ -525,10 +546,6 @@ static BOOL grab_clipping_window( const RECT *clip )
      clip_rect = *clip;
      data->clipping_cursor = TRUE;
      return TRUE;
@@ -62,7 +70,7 @@ index 6d59de4..ccbac76 100644
  }
  
  /***********************************************************************
-@@ -552,6 +570,7 @@ void ungrab_clipping_window(void)
+@@ -552,6 +569,7 @@ void ungrab_clipping_window(void)
      }
      clipping_cursor = FALSE;
      data->clipping_cursor = FALSE;
@@ -70,7 +78,7 @@ index 6d59de4..ccbac76 100644
      x11drv_xinput2_disable( data->display, DefaultRootWindow( data->display ) );
  }
  
-@@ -640,7 +659,7 @@ static void send_mouse_input( HWND hwnd, Window window, unsigned int state, INPU
+@@ -640,7 +658,7 @@ static void send_mouse_input( HWND hwnd, Window window, unsigned int state, INPU
      {
          struct x11drv_thread_data *thread_data = x11drv_thread_data();
          if (!thread_data->clipping_cursor || thread_data->clip_window != window) return;
@@ -79,7 +87,7 @@ index 6d59de4..ccbac76 100644
          return;
      }
  
-@@ -664,7 +683,7 @@ static void send_mouse_input( HWND hwnd, Window window, unsigned int state, INPU
+@@ -664,7 +682,7 @@ static void send_mouse_input( HWND hwnd, Window window, unsigned int state, INPU
          SERVER_END_REQ;
      }
  
@@ -88,7 +96,7 @@ index 6d59de4..ccbac76 100644
  }
  
  #ifdef SONAME_LIBXCURSOR
-@@ -1488,10 +1507,14 @@ BOOL X11DRV_SetCursorPos( INT x, INT y )
+@@ -1488,10 +1506,14 @@ BOOL X11DRV_SetCursorPos( INT x, INT y )
          return FALSE;
      }
  
@@ -103,7 +111,7 @@ index 6d59de4..ccbac76 100644
      XFlush( data->display ); /* avoids bad mouse lag in games that do their own mouse warping */
      TRACE( "warped to %d,%d serial %lu\n", x, y, data->warp_serial );
      return TRUE;
-@@ -1661,18 +1684,40 @@ BOOL X11DRV_MotionNotify( HWND hwnd, XEvent *xev )
+@@ -1661,18 +1683,40 @@ BOOL X11DRV_MotionNotify( HWND hwnd, XEvent *xev )
      TRACE( "hwnd %p/%lx pos %d,%d is_hint %d serial %lu\n",
             hwnd, event->window, event->x, event->y, event->is_hint, event->serial );
  
@@ -150,7 +158,7 @@ index 6d59de4..ccbac76 100644
      map_event_coords( hwnd, event->window, event->root, event->x_root, event->y_root, &input );
      send_mouse_input( hwnd, event->window, event->state, &input );
      return TRUE;
-@@ -1694,18 +1739,40 @@ BOOL X11DRV_EnterNotify( HWND hwnd, XEvent *xev )
+@@ -1694,18 +1738,40 @@ BOOL X11DRV_EnterNotify( HWND hwnd, XEvent *xev )
      if (hwnd == x11drv_thread_data()->grab_hwnd) return FALSE;
  
      /* simulate a mouse motion event */
