@@ -148,6 +148,7 @@ jobs:
             sudo apt-get install -y \
               libwayland-dev \
               libwayland-dev:i386 \
+              libwayland-bin \
               libegl1-mesa-dev \
               libegl1-mesa-dev:i386 \
               libxkbcommon-dev \
@@ -388,6 +389,11 @@ jobs:
         run: |
           cd wine-source
           bash build-scripts/build-step-arm64ec.sh --configure
+          if [ ! -f Makefile ]; then
+            echo "ERROR: configure did not produce wine-source/Makefile"
+            find . -maxdepth 2 \( -name config.log -o -name configure.log -o -name config.status \) -print || true
+            exit 1
+          fi
 
       - name: Verify critical patch markers
         if: steps.upstream_check.outputs.skip_build != 'true'
