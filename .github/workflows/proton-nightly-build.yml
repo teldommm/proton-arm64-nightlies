@@ -1,4 +1,4 @@
-name: Proton ARM64 Bleeding-Edge Build
+name: Proton Bleeding-Edge Build
 
 on:
   schedule:
@@ -36,12 +36,6 @@ on:
         required: false
         default: false
         type: boolean
-
-      xinput2_enabled:
-        description: 'Enable XInput2 support for raw mouse input'
-        required: false
-        default: false
-        type: boolean
       extra_winebus_patches:
         description: 'Download and apply optional GE winebus controller patches'
         required: false
@@ -49,12 +43,12 @@ on:
         type: boolean
 
 jobs:
-  build:
+  prepare:
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-24.04' }}
-    timeout-minutes: 360
-    permissions:
-      contents: write
-
+    outputs:
+      resolved_hash: ${{ steps.upstream_check.outputs.resolved_hash }}
+      resolved_short_hash: ${{ steps.upstream_check.outputs.resolved_short_hash }}
+      skip_build: ${{ steps.upstream_check.outputs.skip_build }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v4
@@ -64,7 +58,6 @@ jobs:
         run: |
           WINE_REF="${{ github.event.inputs.wine_ref || 'bleeding-edge' }}"
           FORCE_BUILD="${{ github.event.inputs.force_build || 'false' }}"
-          XINPUT2_ENABLED="${{ github.event.inputs.xinput2_enabled || 'false' }}"
           PREV_GIT_HASH="$(python3 -c 'import json; d=json.load(open("latest.json")); print(d.get("gitHash",""))')"
 
           if printf '%s' "$WINE_REF" | grep -Eq '^[0-9a-fA-F]{7,40}$'; then
@@ -80,7 +73,7 @@ jobs:
 
           REMOTE_SHORT_HASH="$(printf '%s' "$REMOTE_FULL_HASH" | cut -c1-7)"
           SKIP_BUILD=false
-          if [ "$XINPUT2_ENABLED" != 'true' ] && [ "$FORCE_BUILD" != 'true' ] && [ "$REMOTE_SHORT_HASH" = "$PREV_GIT_HASH" ]; then
+          if [ "$FORCE_BUILD" != 'true' ] && [ "$REMOTE_SHORT_HASH" = "$PREV_GIT_HASH" ]; then
             SKIP_BUILD=true
           fi
 
@@ -97,8 +90,39 @@ jobs:
         run: |
           echo "Skipping build: upstream bleeding-edge HEAD matches latest.json"
 
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.skip_build != 'true'
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-24.04' }}
+    timeout-minutes: 360
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch_id: arm64ec
+            termux_arch: aarch64
+            build_script: build-step-arm64ec.sh
+            output_dir: compiled-files-aarch64
+            prefix_pack: prefixPack-arm64ec.txz
+            profile_version: 10.0.99-arm64ec
+            display_arch: ARM64EC
+            sysvshm: true
+          - arch_id: x86_64
+            termux_arch: x86_64
+            build_script: build-step-x86_64.sh
+            output_dir: compiled-files-x86_64
+            prefix_pack: prefixPack-x86_64.txz
+            profile_version: 10.0-4-x86_64
+            display_arch: x86_64
+            sysvshm: false
+
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
       - name: Free up disk space
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
@@ -107,9 +131,7 @@ jobs:
           df -h
 
       - name: Set up build environment
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
-          XINPUT2_ENABLED="${{ github.event.inputs.xinput2_enabled || 'false' }}"
           sudo dpkg --add-architecture i386
           sudo apt-get update
           sudo apt-get install -y \
@@ -138,13 +160,8 @@ jobs:
             xz-utils \
             python3-zstandard \
             patch
-          if [ "$XINPUT2_ENABLED" = "true" ]; then
-            sudo apt-get install -y \
-              libxi-dev
-          fi
 
-      - name: Clone Wine source (ValveSoftware bleeding-edge by default)
-        if: steps.upstream_check.outputs.skip_build != 'true'
+      - name: Clone Wine source
         run: |
           rm -rf wine-source
           WINE_REF="${{ github.event.inputs.wine_ref || 'bleeding-edge' }}"
@@ -157,8 +174,8 @@ jobs:
           }
           echo "Wine ref: $WINE_REF"
           git -C wine-source rev-parse HEAD
+
       - name: Clone GameNative patches and build scripts
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
           GN_REF="${{ github.event.inputs.gamenative_ref || 'proton_10.0' }}"
           git clone --depth=1 --branch "$GN_REF" \
@@ -174,17 +191,10 @@ jobs:
           cp -r gamenative-src/build-scripts wine-source/build-scripts
           rm -rf gamenative-src
 
-          # Normalize patch line endings (some upstream patches can be CRLF and
-          # fail under git apply as "corrupt patch" despite valid content).
           find wine-source/android/patches -type f -name "*.patch" -exec sed -i 's/\r$//' {} +
-
-          # Fix a GameNative OpenGL patch bug before application. The upstream
-          # patch parses the literal string "WINE_X11FORCEGLX" instead of the
-          # env var value, which breaks the Android GLX force path.
           sed -i 's/atoi("WINE_X11FORCEGLX")/atoi(getenv("WINE_X11FORCEGLX"))/g' \
             wine-source/android/patches/dlls_winex11_drv_opengl_c.patch
 
-          # Optionally fetch GE winebus controller patches directly from source.
           if [ "${{ github.event.inputs.extra_winebus_patches || 'false' }}" = "true" ]; then
             OPTIONAL_WINEBUS_BASE="https://raw.githubusercontent.com/GloriousEggroll/proton-ge-custom/master/patches/wine-hotfixes/wine-wayland"
             OPTIONAL_WINEBUS_DIR="wine-source/android/patches/optional-winebus"
@@ -197,102 +207,60 @@ jobs:
               sed -i 's/\r$//' "$OPTIONAL_WINEBUS_DIR/$patch"
             done
             cp "$OPTIONAL_WINEBUS_DIR"/*.patch wine-source/android/patches/
-            python3 scripts/inject_optional_patches.py \
-              wine-source/build-scripts/build-step-arm64ec.sh \
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
+              0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
+              0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
+              0106-winebus-remove-duplicate-code.patch
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
               0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
               0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
               0106-winebus-remove-duplicate-code.patch
           fi
 
-          # Comment out patches already merged into bleeding-edge (or handled by
-          # fix_*.py scripts) so they don't get double-applied or fail the build.
-          python3 scripts/filter_patches.py \
-            wine-source/build-scripts/build-step-arm64ec.sh \
-            wine-source
+          python3 scripts/filter_patches.py wine-source/build-scripts/build-step-arm64ec.sh wine-source
+          python3 scripts/filter_patches.py wine-source/build-scripts/build-step-x86_64.sh wine-source
+          python3 scripts/patch_build_script.py wine-source/build-scripts/build-step-arm64ec.sh
+          python3 scripts/patch_build_script.py wine-source/build-scripts/build-step-x86_64.sh
 
-          # Rewrite bare 'git apply' in the build script to use forgiving options
-          # (-C1, --ignore-whitespace) and continue on failure instead of aborting.
-          python3 scripts/patch_build_script.py \
-            wine-source/build-scripts/build-step-arm64ec.sh
-
-          # Apply Android-specific window.c changes (xinput2 guards, class_hints,
-          # _NET_WM_PID) via script - the patch is too drifted to apply cleanly.
           python3 scripts/fix_window_c.py wine-source
-
-          # Ensure initialize_xstate_features is declared before use for PE
-          # cross-compile targets (aarch64-windows, arm64ec-windows) where
-          # none of the native arch macros are defined.
           python3 scripts/fix_wineboot_c.py wine-source
-
-          # Remove i386 C++ mangled stubs from wdscore.spec that cause
-          # lld-link "Invalid ARM64EC function name" errors.
           python3 scripts/fix_wdscore.py wine-source
-
-          # Exclude FEX stats shm block on Android - shm_open is in libc but
-          # the ntdll.so link step doesn't pull it in, causing undefined symbol.
           python3 scripts/fix_virtual_c.py wine-source
-
-          # Force-disable fsync on Android so Wine doesn't keep probing
-          # futex_waitv on unsupported kernels and spamming runtime warnings.
           python3 scripts/fix_fsync.py wine-source
-
-          # Apply suspend-bypass chain directly when test-bylaws patches drift.
           python3 scripts/fix_suspend_chain.py wine-source
 
-          # Force-apply additional BYLAWS drift-prone patches and verify markers.
           echo "=== fix_test_bylaws_chain.py header ==="
           sed -n '1,40p' scripts/fix_test_bylaws_chain.py
           if ! grep -q 'Script rev: 2026-03-07-driftproof-v2' scripts/fix_test_bylaws_chain.py; then echo 'ERROR: stale fix_test_bylaws_chain.py in runner'; exit 97; fi
           python3 scripts/fix_test_bylaws_chain.py wine-source
 
-          # Rewrite the baked-in install prefix from the Termux CI path to the
-          # actual custom Proton install directory used by GameNative imports.
-          # This workflow packages type=Proton with a parser-compatible numeric
-          # versionName so stock GameNative recognizes it as ARM64EC without any
-          # app-side parser changes. GameNative normalizes that to
-          # /opt/proton-10.0.99-arm64ec on-device.
-          # If Wine is built against /opt/wine instead, builtin DLL resolution points at
-          # the wrong tree after import and startup dies during kernel32 initialization.
-          # libredirect still rewrites com.winlator.cmod -> app.gamenative at runtime.
-          XINPUT2_ENABLED="${{ github.event.inputs.xinput2_enabled || 'false' }}"
-          PROFILE_VERSION="10.0.99-arm64ec"
-          if [ "$XINPUT2_ENABLED" = "true" ]; then
-            PROFILE_VERSION="10.0.99.2-arm64ec"
-          fi
+          PROFILE_VERSION="${{ matrix.profile_version }}"
           INSTALL_DIR="/data/data/com.winlator.cmod/files/imagefs/opt/proton-${PROFILE_VERSION}"
-          # RUNTIME_PATH is baked into wine's ELF RUNPATH via -Wl,-rpath=.
-          # It must point somewhere libredirect can rewrite, not com.termux.
-          # Use com.winlator.cmod path so libredirect's rewrite rule applies.
           RUNTIME_PATH="/data/data/com.winlator.cmod/files/imagefs/usr"
           echo "Using profile_version=$PROFILE_VERSION"
           echo "Using install_dir=$INSTALL_DIR"
           echo "Using RUNTIME_PATH=$RUNTIME_PATH"
-          sed -i "s|export install_dir=.*|export install_dir=${INSTALL_DIR}|" wine-source/build-scripts/build-step-arm64ec.sh
-          sed -i "s|export RUNTIME_PATH=.*|export RUNTIME_PATH=\"${RUNTIME_PATH}\"|" wine-source/build-scripts/build-step-arm64ec.sh
-          if [ "$XINPUT2_ENABLED" = "true" ]; then
-            sed -i 's/--without-xinput2/--with-xinput2/g' wine-source/build-scripts/build-step-arm64ec.sh
-          fi
+          sed -i "s|export install_dir=.*|export install_dir=${INSTALL_DIR}|" "wine-source/build-scripts/${{ matrix.build_script }}"
+          sed -i "s|export RUNTIME_PATH=.*|export RUNTIME_PATH=\"${RUNTIME_PATH}\"|" "wine-source/build-scripts/${{ matrix.build_script }}"
 
-      - name: Download and extract termuxfs for aarch64
-        if: steps.upstream_check.outputs.skip_build != 'true'
+      - name: Download and extract termuxfs for ${{ matrix.termux_arch }}
         run: |
-          TERMUX_DIR="$HOME/termuxfs/aarch64"
+          TERMUX_DIR="$HOME/termuxfs/${{ matrix.termux_arch }}"
           if [ ! -d "$TERMUX_DIR/data/data/com.termux/files/usr/include" ]; then
             echo "termuxfs not found, downloading..."
             mkdir -p "$TERMUX_DIR"
             cd "$TERMUX_DIR"
-            wget -q https://github.com/GameNative/termux-on-gha/releases/download/build-20260218/termuxfs-aarch64.tar
-            tar -xf termuxfs-aarch64.tar
-            rm -f termuxfs-aarch64.tar
+            wget -q "https://github.com/GameNative/termux-on-gha/releases/download/build-20260218/termuxfs-${{ matrix.termux_arch }}.tar"
+            tar -xf "termuxfs-${{ matrix.termux_arch }}.tar"
+            rm -f "termuxfs-${{ matrix.termux_arch }}.tar"
           else
             echo "termuxfs already present, skipping download."
           fi
 
       - name: Set up Android NDK
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
           NDK_DIR="$HOME/Android/Sdk/ndk/27.3.13750724"
-          if [ ! -f "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang" ]; then
+          if [ ! -d "$NDK_DIR" ]; then
             echo "NDK not found, downloading..."
             mkdir -p "$HOME/Android/Sdk/ndk"
             cd "$HOME/Android/Sdk/ndk"
@@ -304,7 +272,6 @@ jobs:
           fi
 
       - name: Set up LLVM MinGW toolchain
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
           LLVM_DIR="$HOME/toolchains/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64"
           if [ ! -f "$LLVM_DIR/bin/llvm-dlltool" ]; then
@@ -318,56 +285,47 @@ jobs:
           fi
 
       - name: Add bylaws llvm-mingw to PATH
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
-          echo "$HOME/toolchains/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64/bin" >> $GITHUB_PATH
+          echo "$HOME/toolchains/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64/bin" >> "$GITHUB_PATH"
 
       - name: Run autogen.sh
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
           cd wine-source
           bash autogen.sh
 
       - name: Cache wine-tools
-        if: steps.upstream_check.outputs.skip_build != 'true'
         id: cache-wine-tools
         uses: actions/cache@v4
         with:
           path: wine-source/wine-tools
-          key: wine-tools-${{ github.event.inputs.xinput2_enabled || 'false' }}-${{ hashFiles('wine-source/configure.ac', 'wine-source/configure') }}
-          restore-keys: wine-tools-
+          key: wine-tools-${{ matrix.arch_id }}-${{ hashFiles('wine-source/configure.ac', 'wine-source/configure') }}
+          restore-keys: wine-tools-${{ matrix.arch_id }}-
 
       - name: Build wine-tools
-        if: steps.upstream_check.outputs.skip_build != 'true' && steps.cache-wine-tools.outputs.cache-hit != 'true'
+        if: steps.cache-wine-tools.outputs.cache-hit != 'true'
         run: |
-          XINPUT2_ENABLED="${{ github.event.inputs.xinput2_enabled || 'false' }}"
           cd wine-source
           mkdir -p wine-tools
           cd wine-tools
-          XINPUT2_FLAG="--without-xinput2"
-          if [ "$XINPUT2_ENABLED" = "true" ]; then
-            XINPUT2_FLAG="--with-xinput2"
-          fi
-          ../configure --without-x --without-gstreamer --without-vulkan --without-wayland "$XINPUT2_FLAG"
+          ../configure --without-x --without-gstreamer --without-vulkan --without-wayland --without-xinput2
           make -j$(nproc) __tooldeps__ nls/all
 
       - name: Build sysvshm library
-        if: steps.upstream_check.outputs.skip_build != 'true'
+        if: matrix.sysvshm
         run: |
           cd wine-source
-          bash build-scripts/build-step-arm64ec.sh --build-sysvshm
+          bash "build-scripts/${{ matrix.build_script }}" --build-sysvshm
 
       - name: Configure build
-        if: steps.upstream_check.outputs.skip_build != 'true'
         id: configure_build
         continue-on-error: true
         run: |
           cd wine-source
-          bash build-scripts/build-step-arm64ec.sh --configure
+          bash "build-scripts/${{ matrix.build_script }}" --configure
           test -f Makefile
 
       - name: Dump configure logs
-        if: steps.upstream_check.outputs.skip_build != 'true' && steps.configure_build.outcome == 'failure'
+        if: steps.configure_build.outcome == 'failure'
         run: |
           cd wine-source
           echo "ERROR: configure did not produce wine-source/Makefile"
@@ -383,70 +341,45 @@ jobs:
           exit 1
 
       - name: Verify critical patch markers
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
           python3 scripts/verify_required_markers.py wine-source
 
       - name: Build Proton
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
           cd wine-source
-          bash build-scripts/build-step-arm64ec.sh --build
+          bash "build-scripts/${{ matrix.build_script }}" --build
 
       - name: Install Proton
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
-          XINPUT2_ENABLED="${{ github.event.inputs.xinput2_enabled || 'false' }}"
-          PROFILE_VERSION="10.0.99-arm64ec"
-          if [ "$XINPUT2_ENABLED" = "true" ]; then
-            PROFILE_VERSION="10.0.99.2-arm64ec"
-          fi
-          # build-step-arm64ec.sh --install runs 'make install' directly into
-          # the baked install_dir. Pre-create it with sudo so make install can
-          # write there, then let the script copy to OUTPUT_DIR.
+          PROFILE_VERSION="${{ matrix.profile_version }}"
           sudo mkdir -p "/data/data/com.winlator.cmod/files/imagefs/opt/proton-${PROFILE_VERSION}"
           sudo chmod -R 777 /data/data
 
           cd wine-source
-          bash build-scripts/build-step-arm64ec.sh --install
+          bash "build-scripts/${{ matrix.build_script }}" --install
 
-          OUTPUT_DIR="$HOME/compiled-files-aarch64"
+          OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
           echo "=== OUTPUT_DIR bin contents ==="
-          ls -la "$OUTPUT_DIR/bin/"
+          ls -la "$OUTPUT_DIR/bin/" || true
           echo "=== wine binary type ==="
           file "$OUTPUT_DIR/bin/wine" 2>/dev/null || true
           file "$OUTPUT_DIR/bin/wineserver" 2>/dev/null || true
 
       - name: Download prefixPack.txz
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
-          wget https://github.com/GameNative/bionic-prefix-files/raw/main/prefixPack-arm64ec.txz \
-            -O $HOME/compiled-files-aarch64/prefixPack.txz
+          wget -q "https://github.com/GameNative/bionic-prefix-files/raw/main/${{ matrix.prefix_pack }}" \
+            -O "$HOME/${{ matrix.output_dir }}/prefixPack.txz"
 
       - name: Generate profile.json files and package
-        if: steps.upstream_check.outputs.skip_build != 'true'
         run: |
-          OUTPUT_DIR="$HOME/compiled-files-aarch64"
+          OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
           GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
           GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
-          XINPUT2_ENABLED="${{ github.event.inputs.xinput2_enabled || 'false' }}"
-          VERSION_BASE="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-arm64ec"
-          VERSION="$VERSION_BASE"
-          PROFILE_VERSION="10.0.99-arm64ec"
-          DISPLAY_NAME="Proton bleeding-edge ARM64 ${GIT_DATE} (${GIT_HASH})"
-          if [ "$XINPUT2_ENABLED" = "true" ]; then
-            VERSION="proton-bleeding-edge-xinput2-${GIT_DATE}-${GIT_HASH}-arm64ec"
-            PROFILE_VERSION="10.0.99.2-arm64ec"
-            DISPLAY_NAME="Proton bleeding-edge XInput2 ARM64 ${GIT_DATE} (${GIT_HASH})"
-          fi
+          VERSION="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-${{ matrix.arch_id }}"
+          PROFILE_VERSION="${{ matrix.profile_version }}"
+          DISPLAY_NAME="Proton bleeding-edge ${{ matrix.display_arch }} ${GIT_DATE} (${GIT_HASH})"
 
           mkdir -p "$GITHUB_WORKSPACE/output"
-
-          # versionName: GameNative installs to /opt/proton-{versionName}/
-          # Keep it numeric so the stock WineInfo parser accepts it, but use a
-          # non-stable value so it doesn't collide with shipped builds.
-          # Both Proton and Wine profiles use "wine" as the paths key (confirmed from
-          # GameNative/proton-wine build-proton.yml). Proton versionCode=1, Wine versionCode=0.
           PROTON_VERSION_CODE=1
           WINE_VERSION_CODE=0
 
@@ -463,7 +396,7 @@ jobs:
             "${PROTON_VERSION_CODE}" \
             "${DISPLAY_NAME}"
 
-          python3 "$GITHUB_WORKSPACE/scripts/generate_profile.py" \
+          python3 scripts/generate_profile.py \
             "${OUTPUT_DIR}/profile.json" \
             "${PROFILE_VERSION}" \
             "${WINE_VERSION_CODE}" \
@@ -475,103 +408,208 @@ jobs:
             bin lib share prefixPack.txz profile.json
 
           cd "$GITHUB_WORKSPACE"
-          sha256sum output/proton-wine-${VERSION}.wcp.xz > output/proton-wine-${VERSION}.wcp.xz.sha256
+          sha256sum "output/proton-wine-${VERSION}.wcp.xz" > "output/proton-wine-${VERSION}.wcp.xz.sha256"
+
+          WCP_SHA=$(cut -d' ' -f1 "output/proton-${VERSION}.wcp.sha256")
+          WCPXZ_SHA=$(cut -d' ' -f1 "output/proton-wine-${VERSION}.wcp.xz.sha256")
+
+          cat > "output/metadata-${{ matrix.arch_id }}.json" <<EOF
+          {
+            "arch": "${{ matrix.arch_id }}",
+            "gitHash": "${GIT_HASH}",
+            "gitDate": "${GIT_DATE}",
+            "version": "${VERSION}",
+            "profileVersion": "${PROFILE_VERSION}",
+            "wcpFile": "proton-${VERSION}.wcp",
+            "wcpSha": "${WCP_SHA}",
+            "wcpxzFile": "proton-wine-${VERSION}.wcp.xz",
+            "wcpxzSha": "${WCPXZ_SHA}"
+          }
+          EOF
 
           ls -lh output/
 
-      - name: Detect release-worthy changes
-        if: steps.upstream_check.outputs.skip_build != 'true'
-        id: detect_changes
-        run: |
-          GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
-          GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
-          XINPUT2_ENABLED="${{ github.event.inputs.xinput2_enabled || 'false' }}"
-          VERSION="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-arm64ec"
-          RELEASE_TAG="bleeding-edge-${GIT_DATE}-${GIT_HASH}"
-          if [ "$XINPUT2_ENABLED" = "true" ]; then
-            VERSION="proton-bleeding-edge-xinput2-${GIT_DATE}-${GIT_HASH}-arm64ec"
-            RELEASE_TAG="bleeding-edge-xinput2-${GIT_DATE}-${GIT_HASH}"
-          fi
-          WCP_SHA=$(cut -d' ' -f1 output/proton-${VERSION}.wcp.sha256)
-          WCPXZ_SHA=$(cut -d' ' -f1 output/proton-wine-${VERSION}.wcp.xz.sha256)
-          PREV_GIT_HASH="$(python3 -c 'import json; d=json.load(open("latest.json")); print(d.get("gitHash",""))')"
-          PREV_WCP_SHA="$(python3 -c 'import json; d=json.load(open("latest.json")); print(d.get("wcp",{}).get("sha256",""))')"
-          PREV_WCPXZ_SHA="$(python3 -c 'import json; d=json.load(open("latest.json")); print(d.get("wcpxz",{}).get("sha256",""))')"
-
-          SHOULD_RELEASE=false
-          if [ "$XINPUT2_ENABLED" = "true" ]; then
-            SHOULD_RELEASE=true
-          elif [ "$GIT_HASH" != "$PREV_GIT_HASH" ] || [ "$WCP_SHA" != "$PREV_WCP_SHA" ] || [ "$WCPXZ_SHA" != "$PREV_WCPXZ_SHA" ]; then
-            SHOULD_RELEASE=true
-          fi
-
-          echo "git_hash=$GIT_HASH" >> "$GITHUB_OUTPUT"
-          echo "git_date=$GIT_DATE" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-          echo "wcp_sha=$WCP_SHA" >> "$GITHUB_OUTPUT"
-          echo "wcpxz_sha=$WCPXZ_SHA" >> "$GITHUB_OUTPUT"
-          echo "should_release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
-
-          echo "Previous gitHash: $PREV_GIT_HASH"
-          echo "Current  gitHash: $GIT_HASH"
-          echo "Previous wcp sha: $PREV_WCP_SHA"
-          echo "Current  wcp sha: $WCP_SHA"
-          echo "Previous wcpxz sha: $PREV_WCPXZ_SHA"
-          echo "Current  wcpxz sha: $WCPXZ_SHA"
-          echo "should_release=$SHOULD_RELEASE"
-
       - name: Upload artifacts
-        if: steps.upstream_check.outputs.skip_build != 'true' && steps.detect_changes.outputs.should_release == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: proton-arm64-nightly
+          name: proton-bleeding-edge-${{ matrix.arch_id }}
           path: output/
           retention-days: 30
 
+  release:
+    needs:
+      - prepare
+      - build
+    if: needs.prepare.outputs.skip_build != 'true'
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Detect release-worthy changes
+        id: detect_changes
+        run: |
+          python3 <<'PY'
+          import glob
+          import json
+          import os
+          from pathlib import Path
+
+          metas = {}
+          for path in glob.glob("artifacts/**/metadata-*.json", recursive=True):
+              data = json.loads(Path(path).read_text())
+              metas[data["arch"]] = data
+
+          required = {"arm64ec", "x86_64"}
+          missing = required.difference(metas)
+          if missing:
+              raise SystemExit(f"missing metadata files for: {sorted(missing)}")
+
+          arm = metas["arm64ec"]
+          x86 = metas["x86_64"]
+          latest = json.loads(Path("latest.json").read_text())
+          run_suffix = os.environ['GITHUB_RUN_NUMBER']
+          release_tag = f"bleeding-edge-{arm['gitDate']}-{arm['gitHash']}-run{run_suffix}"
+
+          artifacts = latest.get("artifacts", {})
+          prev_arm = artifacts.get("arm64ec", {})
+          prev_x86 = artifacts.get("x86_64", {})
+
+          prev_arm_wcp = prev_arm.get("wcp", {}).get("sha256") or latest.get("wcp", {}).get("sha256", "")
+          prev_arm_wcpxz = prev_arm.get("wcpxz", {}).get("sha256") or latest.get("wcpxz", {}).get("sha256", "")
+          prev_x86_wcp = prev_x86.get("wcp", {}).get("sha256", "")
+          prev_x86_wcpxz = prev_x86.get("wcpxz", {}).get("sha256", "")
+
+          should_release = (
+              arm["gitHash"] != latest.get("gitHash", "")
+              or arm["wcpSha"] != prev_arm_wcp
+              or arm["wcpxzSha"] != prev_arm_wcpxz
+              or x86["wcpSha"] != prev_x86_wcp
+              or x86["wcpxzSha"] != prev_x86_wcpxz
+          )
+
+          outputs = {
+              "git_hash": arm["gitHash"],
+              "git_date": arm["gitDate"],
+              "release_tag": release_tag,
+              "should_release": "true" if should_release else "false",
+          }
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              for key, value in outputs.items():
+                  fh.write(f"{key}={value}\n")
+
+          print(json.dumps({
+              "previousGitHash": latest.get("gitHash", ""),
+              "currentGitHash": arm["gitHash"],
+              "previousArmWcpSha": prev_arm_wcp,
+              "currentArmWcpSha": arm["wcpSha"],
+              "previousArmWcpxzSha": prev_arm_wcpxz,
+              "currentArmWcpxzSha": arm["wcpxzSha"],
+              "previousX86WcpSha": prev_x86_wcp,
+              "currentX86WcpSha": x86["wcpSha"],
+              "previousX86WcpxzSha": prev_x86_wcpxz,
+              "currentX86WcpxzSha": x86["wcpxzSha"],
+              "shouldRelease": should_release,
+          }, indent=2))
+          PY
+
+      - name: Prepare release files
+        if: steps.detect_changes.outputs.should_release == 'true'
+        run: |
+          mkdir -p release
+          find artifacts -name "*.wcp" -exec cp {} release/ \;
+          find artifacts -name "*.wcp.xz" -exec cp {} release/ \;
+          find artifacts -name "*.sha256" -exec cp {} release/ \;
+          ls -lah release/
+
       - name: Create GitHub Release
-        if: steps.upstream_check.outputs.skip_build != 'true' && steps.detect_changes.outputs.should_release == 'true'
+        if: steps.detect_changes.outputs.should_release == 'true'
         run: |
           GIT_HASH="${{ steps.detect_changes.outputs.git_hash }}"
           GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
-          VERSION="${{ steps.detect_changes.outputs.version }}"
           TAG="${{ steps.detect_changes.outputs.release_tag }}"
-          TITLE="Proton bleeding-edge ARM64 (${GIT_DATE})"
-          NOTES="Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android + ARM64EC patches. Automated bleeding-edge build; use at your own risk."
-          if [ "${{ github.event.inputs.xinput2_enabled || 'false' }}" = "true" ]; then
-            TITLE="Proton bleeding-edge XInput2 ARM64 (${GIT_DATE})"
-            NOTES="Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android + ARM64EC patches and XInput2 enabled. Automated bleeding-edge build; use at your own risk."
-          fi
-          gh release create "$TAG" output/* \
+          TITLE="Proton bleeding-edge x86_64 + ARM64EC (${GIT_DATE})"
+          NOTES="Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android build scripts. Includes x86_64 and ARM64EC packages in the same release. Automated bleeding-edge build; use at your own risk."
+          gh release create "$TAG" release/* \
             --title "$TITLE" \
             --notes "$NOTES" \
             --prerelease \
-            || gh release upload "$TAG" output/* --clobber
+            || gh release upload "$TAG" release/* --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update latest.json
-        if: steps.upstream_check.outputs.skip_build != 'true' && steps.detect_changes.outputs.should_release == 'true' && (github.event.inputs.xinput2_enabled || 'false') != 'true'
+        if: steps.detect_changes.outputs.should_release == 'true'
         run: |
-          GIT_HASH="${{ steps.detect_changes.outputs.git_hash }}"
-          GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
-          VERSION="${{ steps.detect_changes.outputs.version }}"
-          WCP_SHA="${{ steps.detect_changes.outputs.wcp_sha }}"
-          WCPXZ_SHA="${{ steps.detect_changes.outputs.wcpxz_sha }}"
-          python3 scripts/generate_latest.py \
-            "latest.json" \
-            "${VERSION}" \
-            "${GIT_DATE}" \
-            "${GIT_HASH}" \
-            "proton-${VERSION}.wcp" \
-            "${WCP_SHA}" \
-            "proton-wine-${VERSION}.wcp.xz" \
-            "${WCPXZ_SHA}" \
-            "${{ steps.detect_changes.outputs.release_tag }}"
-          cat latest.json
+          python3 <<'PY'
+          import glob
+          import json
+          from pathlib import Path
+
+          metas = {}
+          for path in glob.glob("artifacts/**/metadata-*.json", recursive=True):
+              data = json.loads(Path(path).read_text())
+              metas[data["arch"]] = data
+
+          arm = metas["arm64ec"]
+          x86 = metas["x86_64"]
+          data = {
+              "versionName": arm["version"],
+              "date": arm["gitDate"],
+              "gitHash": arm["gitHash"],
+              "wcp": {
+                  "fileName": arm["wcpFile"],
+                  "sha256": arm["wcpSha"],
+              },
+              "wcpxz": {
+                  "fileName": arm["wcpxzFile"],
+                  "sha256": arm["wcpxzSha"],
+              },
+              "artifacts": {
+                  "arm64ec": {
+                      "versionName": arm["version"],
+                      "profileVersion": arm["profileVersion"],
+                      "wcp": {
+                          "fileName": arm["wcpFile"],
+                          "sha256": arm["wcpSha"],
+                      },
+                      "wcpxz": {
+                          "fileName": arm["wcpxzFile"],
+                          "sha256": arm["wcpxzSha"],
+                      },
+                  },
+                  "x86_64": {
+                      "versionName": x86["version"],
+                      "profileVersion": x86["profileVersion"],
+                      "wcp": {
+                          "fileName": x86["wcpFile"],
+                          "sha256": x86["wcpSha"],
+                      },
+                      "wcpxz": {
+                          "fileName": x86["wcpxzFile"],
+                          "sha256": x86["wcpxzSha"],
+                      },
+                  },
+              },
+              "releaseTag": "${{ steps.detect_changes.outputs.release_tag }}",
+          }
+          Path("latest.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(data, indent=2))
+          PY
 
       - name: Commit latest.json
-        if: steps.upstream_check.outputs.skip_build != 'true' && steps.detect_changes.outputs.should_release == 'true' && (github.event.inputs.xinput2_enabled || 'false') != 'true'
+        if: steps.detect_changes.outputs.should_release == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -587,8 +625,8 @@ jobs:
           set +e
           echo "=== Disk usage before cleanup ==="
           df -h
-          rm -rf "$GITHUB_WORKSPACE/wine-source" "$GITHUB_WORKSPACE/gamenative-src" "$GITHUB_WORKSPACE/output" || true
-          rm -rf "$HOME/compiled-files-aarch64" "$HOME/wine-staging" || true
+          rm -rf "$GITHUB_WORKSPACE/wine-source" "$GITHUB_WORKSPACE/gamenative-src" "$GITHUB_WORKSPACE/artifacts" "$GITHUB_WORKSPACE/release" || true
+          rm -rf "$HOME/compiled-files-aarch64" "$HOME/compiled-files-x86_64" "$HOME/wine-staging" || true
           rm -rf "$RUNNER_TEMP"/* || true
           echo "=== Disk usage after cleanup ==="
           df -h
