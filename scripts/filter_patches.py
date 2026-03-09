@@ -30,6 +30,7 @@ ALREADY_APPLIED = {
     # Handled by fix_window_c.py - skip this patch so git apply never sees it.
     # The patch line numbers are too drifted against bleeding-edge to apply cleanly.
     "dlls_winex11_drv_window_c.patch":      ("dlls/winex11.drv/window.c",    "steam_proton"),
+    "dlls_winex11_drv_mouse_c.patch":       ("dlls/winex11.drv/mouse.c",     ["clip_center", "needs_relative_motion", "get_send_mouse_flags"]),
 
     # These are all merged into ValveSoftware/wine bleeding-edge already.
     "dlls_ntdll_loader_c.patch":            ("dlls/ntdll/loader.c",          "libarm64ecfex.dll"),
