@@ -2,7 +2,7 @@ name: Proton Bleeding-Edge Build
 
 on:
   schedule:
-    - cron: '15 * * * *'
+    - cron: '15 */6 * * *'
   workflow_dispatch:
     inputs:
       runner:
@@ -615,6 +615,7 @@ jobs:
           rm -rf "$RUNNER_TEMP"/* || true
           echo "=== Disk usage after cleanup ==="
           df -h
+
 
 
 
