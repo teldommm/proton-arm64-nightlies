@@ -46,6 +46,11 @@ on:
         required: false
         default: false
         type: boolean
+      proton9_input_focus_workaround:
+        description: 'Apply Android-only Proton 9 style X11 focus fallback patch'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   prepare:
@@ -238,6 +243,15 @@ jobs:
             cp "ge-second-pass/mouse/dlls_winex11_drv_mouse_c.patch" "wine-source/android/patches/dlls_winex11_drv_mouse_c.patch"
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh               "$OPTIONAL_GE_PERF_PATCH"               "$OPTIONAL_GE_KEYBOARD_PATCH"               "$OPTIONAL_GE_EVENT_PATCH"
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh               "$OPTIONAL_GE_PERF_PATCH"               "$OPTIONAL_GE_KEYBOARD_PATCH"               "$OPTIONAL_GE_EVENT_PATCH"
+          fi
+
+          if [ "${{ inputs.proton9_input_focus_workaround && 'true' || 'false' }}" = "true" ]; then
+            OPTIONAL_P9_FOCUS_PATCH="dlls_winex11_drv_event_focus_regression_c.patch"
+            cp "ge-second-pass/focus/$OPTIONAL_P9_FOCUS_PATCH" "wine-source/android/patches/$OPTIONAL_P9_FOCUS_PATCH"
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_P9_FOCUS_PATCH"
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_P9_FOCUS_PATCH"
+            echo "=== Proton 9 input focus workaround applied ==="
+            printf '%s\n' "$OPTIONAL_P9_FOCUS_PATCH"
           fi
 
           python3 scripts/filter_patches.py wine-source/build-scripts/build-step-arm64ec.sh wine-source
