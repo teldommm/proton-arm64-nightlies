@@ -46,6 +46,11 @@ on:
         required: false
         default: false
         type: boolean
+      android_directinput_keyboard_workaround:
+        description: 'Apply Android-only DirectInput keyboard XIM bypass patch'
+        required: false
+        default: false
+        type: boolean
       proton9_input_focus_workaround:
         description: 'Apply Android-only Proton 9 style X11 focus fallback patch'
         required: false
@@ -243,6 +248,15 @@ jobs:
             cp "ge-second-pass/mouse/dlls_winex11_drv_mouse_c.patch" "wine-source/android/patches/dlls_winex11_drv_mouse_c.patch"
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh               "$OPTIONAL_GE_PERF_PATCH"               "$OPTIONAL_GE_KEYBOARD_PATCH"               "$OPTIONAL_GE_EVENT_PATCH"
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh               "$OPTIONAL_GE_PERF_PATCH"               "$OPTIONAL_GE_KEYBOARD_PATCH"               "$OPTIONAL_GE_EVENT_PATCH"
+          fi
+
+          if [ "${{ inputs.android_directinput_keyboard_workaround && 'true' || 'false' }}" = "true" ]; then
+            OPTIONAL_ANDROID_DI_KEYBOARD_PATCH="dlls_winex11_drv_keyboard_directinput_c.patch"
+            cp "ge-second-pass/keyboard/$OPTIONAL_ANDROID_DI_KEYBOARD_PATCH" "wine-source/android/patches/$OPTIONAL_ANDROID_DI_KEYBOARD_PATCH"
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_ANDROID_DI_KEYBOARD_PATCH"
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_ANDROID_DI_KEYBOARD_PATCH"
+            echo "=== Android DirectInput keyboard workaround applied ==="
+            printf '%s\n' "$OPTIONAL_ANDROID_DI_KEYBOARD_PATCH"
           fi
 
           if [ "${{ inputs.proton9_input_focus_workaround && 'true' || 'false' }}" = "true" ]; then
@@ -650,6 +664,7 @@ jobs:
           rm -rf "$RUNNER_TEMP"/* || true
           echo "=== Disk usage after cleanup ==="
           df -h
+
 
 
 
