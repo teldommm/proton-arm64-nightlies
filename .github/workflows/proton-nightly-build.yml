@@ -213,6 +213,7 @@ jobs:
             python3 scripts/fix_wineboot_c.py wine-source
             python3 scripts/fix_wdscore.py wine-source
             python3 scripts/fix_fsync.py wine-source
+            python3 scripts/fix_virtual_c.py wine-source
             python3 -c "from pathlib import Path; p=Path('wine-source/dlls/winex11.drv/window.c'); s=p.read_text(encoding='utf-8'); old='                /* listen to raw xinput event in the desktop window thread */\n                data->xinput2_rawinput = TRUE;\n                x11drv_xinput2_enable( data->display, DefaultRootWindow( data->display ) );\n'; new='                /* listen to raw xinput event in the desktop window thread */\n#ifndef __ANDROID__\n                data->xinput2_rawinput = TRUE;\n                x11drv_xinput2_enable( data->display, DefaultRootWindow( data->display ) );\n#endif\n'; p.write_text(s.replace(old, new, 1), encoding='utf-8') if old in s and new not in s else None"
             echo "=== GameNative feature patches disabled; mandatory build fixes kept ==="
             printf '%s\n' \
@@ -222,6 +223,7 @@ jobs:
               'fix_wineboot_c.py kept' \
               'fix_wdscore.py kept' \
               'fix_fsync.py kept' \
+              'fix_virtual_c.py kept' \
               'winex11 window.c Android xinput2_rawinput guard kept via inline build fix' \
               'repo-side feature patch injection skipped'
           else
