@@ -51,6 +51,11 @@ on:
         required: false
         default: false
         type: boolean
+      android_keyboard_no_rawinput_workaround:
+        description: 'Apply Android-only keyboard no-raw-input send patch'
+        required: false
+        default: false
+        type: boolean
       proton9_event_queue_filter_workaround:
         description: 'Apply Android-only Proton 9 style X11 event queue filter patch'
         required: false
@@ -254,6 +259,14 @@ jobs:
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_ANDROID_DI_KEYBOARD_PATCH"
             echo "=== Android DirectInput keyboard workaround applied ==="
             printf '%s\n' "$OPTIONAL_ANDROID_DI_KEYBOARD_PATCH"
+          fi
+
+          if [ "${{ inputs.android_keyboard_no_rawinput_workaround && 'true' || 'false' }}" = "true" ]; then
+            OPTIONAL_ANDROID_NO_RAW_KBD_PATCH="dlls_winex11_drv_keyboard_no_rawinput_c.patch"
+            cp "ge-second-pass/keyboard/$OPTIONAL_ANDROID_NO_RAW_KBD_PATCH" "wine-source/android/patches/$OPTIONAL_ANDROID_NO_RAW_KBD_PATCH"
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_ANDROID_NO_RAW_KBD_PATCH"
+            echo "=== Android keyboard no-raw-input workaround applied ==="
+            printf '%s\n' "$OPTIONAL_ANDROID_NO_RAW_KBD_PATCH"
           fi
 
           if [ "${{ inputs.proton9_input_focus_workaround && 'true' || 'false' }}" = "true" ]; then
