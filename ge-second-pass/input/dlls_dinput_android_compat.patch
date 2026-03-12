@@ -1,4 +1,62 @@
-diff --git a/dlls/dinput/keyboard.c b/dlls/dinput/keyboard.c
+--- a/dlls/dinput/dinput_private.h
++++ b/dlls/dinput/dinput_private.h
+@@ -75,6 +75,8 @@
+                                         RAWINPUT *raw );
+ extern void dinput_keyboard_rawinput_hook( IDirectInputDevice8W *iface, WPARAM wparam, LPARAM lparam,
+                                            RAWINPUT *raw );
++extern void dinput_keyboard_android_compat_mirror_event( IDirectInputDevice8W *iface, DWORD vkey,
++                                                         DWORD scan_code, BOOL up );
+ 
+ extern void check_dinput_events(void);
+ 
+--- a/dlls/dinput/dinput_main.c
++++ b/dlls/dinput/dinput_main.c
+@@ -23,6 +23,7 @@
+ 
+ #include <assert.h>
+ #include <stdarg.h>
++#include <stdlib.h>
+ #include <string.h>
+ 
+ #define COBJMACROS
+@@ -84,6 +85,37 @@
+ static CRITICAL_SECTION dinput_hook_crit = { &dinput_critsect_debug, -1, 0, 0, 0, 0 };
+ 
+ static struct list acquired_device_list = LIST_INIT( acquired_device_list );
++
++void dinput_keyboard_android_compat_mirror_event( IDirectInputDevice8W *iface, DWORD vkey, DWORD scan_code, BOOL up )
++{
++#ifdef __ANDROID__
++    struct dinput_device *device, *targets[8];
++    UINT count = 0, i;
++
++    if (!getenv( "WINE_ANDROID_DINPUT_COMPAT" )) return;
++
++    EnterCriticalSection( &dinput_hook_crit );
++    LIST_FOR_EACH_ENTRY( device, &acquired_device_list, struct dinput_device, entry )
++    {
++        if (&device->IDirectInputDevice8W_iface == iface) continue;
++        if (!IsEqualGUID( &device->guid, &GUID_SysKeyboard )) continue;
++        if (device->status != STATUS_ACQUIRED) continue;
++        if (device->use_raw_input) continue;
++        if (device->user_format.dwDataSize != 272) continue;
++        dinput_device_internal_addref( device );
++        targets[count++] = device;
++        if (count >= ARRAY_SIZE( targets )) break;
++    }
++    LeaveCriticalSection( &dinput_hook_crit );
++
++    for (i = 0; i < count; ++i)
++    {
++        extern void dinput_keyboard_mirror_event( IDirectInputDevice8W *iface, DWORD vkey, DWORD scan_code, BOOL up );
++        dinput_keyboard_mirror_event( &targets[i]->IDirectInputDevice8W_iface, vkey, scan_code, up );
++        dinput_device_internal_release( targets[i] );
++    }
++#endif
++}
+ 
+ static void unhook_device_window_foreground_changes( struct dinput_device *device )
+ {
 --- a/dlls/dinput/keyboard.c
 +++ b/dlls/dinput/keyboard.c
 @@ -21,6 +21,7 @@
@@ -9,7 +67,7 @@ diff --git a/dlls/dinput/keyboard.c b/dlls/dinput/keyboard.c
  #include <string.h>
  #include "windef.h"
  #include "winbase.h"
-@@ -35,6 +36,15 @@
+@@ -35,6 +36,17 @@
  WINE_DEFAULT_DEBUG_CHANNEL(dinput);
  
  static const struct dinput_device_vtbl keyboard_vtbl;
@@ -22,10 +80,33 @@ diff --git a/dlls/dinput/keyboard.c b/dlls/dinput/keyboard.c
 +    return FALSE;
 +#endif
 +}
++
++static int keyboard_android_mirror_depth;
  
  struct keyboard
  {
-@@ -206,7 +216,8 @@
+@@ -115,6 +127,20 @@
+ 
+     if (impl->base.hEvent) SetEvent( impl->base.hEvent );
+     LeaveCriticalSection( &impl->base.crit );
++
++    if (android_dinput_compat_enabled() && !keyboard_android_mirror_depth)
++    {
++        keyboard_android_mirror_depth++;
++        dinput_keyboard_android_compat_mirror_event( iface, vkey, scan_code, up );
++        keyboard_android_mirror_depth--;
++    }
++}
++
++void dinput_keyboard_mirror_event( IDirectInputDevice8W *iface, DWORD vkey, DWORD scan_code, BOOL up )
++{
++    struct keyboard *impl = impl_from_IDirectInputDevice8W( iface );
++
++    keyboard_handle_event( impl, vkey, scan_code, up );
+ }
+ 
+ void dinput_keyboard_rawinput_hook( IDirectInputDevice8W *iface, WPARAM wparam, LPARAM lparam, RAWINPUT *ri )
+@@ -206,7 +232,8 @@
      impl->base.caps.dwDevType = impl->base.instance.dwDevType;
      impl->base.caps.dwFirmwareRevision = 100;
      impl->base.caps.dwHardwareRevision = 100;
@@ -35,7 +116,6 @@ diff --git a/dlls/dinput/keyboard.c b/dlls/dinput/keyboard.c
      subtype = GET_DIDEVICE_SUBTYPE( impl->base.instance.dwDevType );
  
      if (FAILED(hr = dinput_device_init_device_format( &impl->base.IDirectInputDevice8W_iface ))) goto failed;
-diff --git a/dlls/dinput/mouse.c b/dlls/dinput/mouse.c
 --- a/dlls/dinput/mouse.c
 +++ b/dlls/dinput/mouse.c
 @@ -20,6 +20,7 @@
