@@ -1,7 +1,7 @@
 diff --git a/dlls/winex11.drv/keyboard.c b/dlls/winex11.drv/keyboard.c
 --- a/dlls/winex11.drv/keyboard.c
 +++ b/dlls/winex11.drv/keyboard.c
-@@ -38,6 +38,8 @@
+@@ -38,6 +38,7 @@
  
  #include <ctype.h>
  #include <stdarg.h>
@@ -9,7 +9,7 @@ diff --git a/dlls/winex11.drv/keyboard.c b/dlls/winex11.drv/keyboard.c
  #include <string.h>
  
  #include "x11drv.h"
-@@ -1128,6 +1130,14 @@
+@@ -1128,6 +1129,14 @@
  /***********************************************************************
   *           X11DRV_send_keyboard_input
   */
@@ -24,7 +24,7 @@ diff --git a/dlls/winex11.drv/keyboard.c b/dlls/winex11.drv/keyboard.c
  static void X11DRV_send_keyboard_input( HWND hwnd, WORD vkey, WORD scan, UINT flags, UINT time )
  {
      INPUT input;
-@@ -1141,6 +1151,10 @@
+@@ -1141,6 +1150,10 @@
      input.ki.time        = time;
      input.ki.dwExtraInfo = 0;
  
@@ -35,7 +35,7 @@ diff --git a/dlls/winex11.drv/keyboard.c b/dlls/winex11.drv/keyboard.c
      NtUserSendHardwareInput( hwnd, 0, &input, 0 );
  }
  
-@@ -1150,6 +1164,13 @@
+@@ -1150,6 +1163,13 @@
   */
  static void set_async_key_state( const BYTE state[256] )
  {
@@ -49,7 +49,7 @@ diff --git a/dlls/winex11.drv/keyboard.c b/dlls/winex11.drv/keyboard.c
      SERVER_START_REQ( set_key_state )
      {
          req->async = 1;
-@@ -1428,6 +1449,12 @@
+@@ -1428,6 +1448,12 @@
      dwFlags = 0;
      if ( event->type == KeyRelease ) dwFlags |= KEYEVENTF_KEYUP;
      if ( vkey & 0x100 )              dwFlags |= KEYEVENTF_EXTENDEDKEY;
@@ -115,7 +115,7 @@ diff --git a/server/queue.c b/server/queue.c
 diff --git a/dlls/dinput/keyboard.c b/dlls/dinput/keyboard.c
 --- a/dlls/dinput/keyboard.c
 +++ b/dlls/dinput/keyboard.c
-@@ -21,6 +21,8 @@
+@@ -21,6 +21,7 @@
   */
  
  #include <stdarg.h>
@@ -123,7 +123,7 @@ diff --git a/dlls/dinput/keyboard.c b/dlls/dinput/keyboard.c
  #include <string.h>
  #include "windef.h"
  #include "winbase.h"
-@@ -33,6 +35,14 @@
+@@ -33,6 +34,14 @@
  #include "wine/debug.h"
  
  WINE_DEFAULT_DEBUG_CHANNEL(dinput);
@@ -138,7 +138,7 @@ diff --git a/dlls/dinput/keyboard.c b/dlls/dinput/keyboard.c
  
  static const struct dinput_device_vtbl keyboard_vtbl;
  
-@@ -107,6 +117,10 @@
+@@ -107,6 +116,10 @@
  
      impl->base.device_state[dik_code] = new_diks;
      TRACE( "setting key %02x to %02x\n", dik_code, impl->base.device_state[dik_code] );
@@ -152,7 +152,7 @@ diff --git a/dlls/dinput/keyboard.c b/dlls/dinput/keyboard.c
 diff --git a/dlls/dinput/device.c b/dlls/dinput/device.c
 --- a/dlls/dinput/device.c
 +++ b/dlls/dinput/device.c
-@@ -20,6 +20,8 @@
+@@ -20,6 +20,7 @@
   */
  
  #include <stdarg.h>
@@ -160,7 +160,7 @@ diff --git a/dlls/dinput/device.c b/dlls/dinput/device.c
  #include <string.h>
  #include <math.h>
  
-@@ -41,6 +43,14 @@
+@@ -41,6 +42,14 @@
  #define WM_WINE_NOTIFY_ACTIVITY WM_USER
  
  WINE_DEFAULT_DEBUG_CHANNEL(dinput);
@@ -175,7 +175,7 @@ diff --git a/dlls/dinput/device.c b/dlls/dinput/device.c
  
  /* Windows uses this GUID for guidProduct on non-keyboard/mouse devices.
   * Data1 contains the device VID (low word) and PID (high word).
-@@ -1497,6 +1507,15 @@
+@@ -1497,6 +1506,15 @@
          hr = DI_OK;
      }
      LeaveCriticalSection( &impl->crit );
