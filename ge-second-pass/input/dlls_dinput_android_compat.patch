@@ -1,7 +1,7 @@
 diff --git a/dlls/dinput/dinput_main.c b/dlls/dinput/dinput_main.c
-index 62365f0b323..55d4001a519 100644
---- a/dlls/dinput/dinput_main.c
-+++ b/dlls/dinput/dinput_main.c
+index 62365f0..b2efc19 100644
+--- a/dlls/dinput/dinput_main.c	
++++ b/dlls/dinput/dinput_main.c	
 @@ -23,6 +23,7 @@
  
  #include <assert.h>
@@ -167,18 +167,20 @@ index 62365f0b323..55d4001a519 100644
              TRACE( "calling dinput_keyboard_hook (%p %Ix %Ix)\n", device, wparam, lparam );
              skip |= dinput_keyboard_hook( &device->IDirectInputDevice8W_iface, wparam, lparam );
              break;
-@@ -216,6 +341,10 @@ static void input_thread_update_device_list( struct input_thread_state *state )
+@@ -216,6 +341,12 @@ static void input_thread_update_device_list( struct input_thread_state *state )
  
          if (!device->read_event || !device->vtbl->read) continue;
          state->events[count] = device->read_event;
++#ifdef __ANDROID__
 +        if (android_dinput_debug_enabled())
 +            ERR( "INPUTDBG dinput.android.route iface=%p type=%s raw=%u coop=%#x read_event=%p\n",
 +                 &device->IDirectInputDevice8W_iface, android_dinput_type_name( device->instance.dwDevType ),
 +                 device->use_raw_input, device->dwCoopLevel, device->read_event );
++#endif
          dinput_device_internal_addref( (state->devices[count] = device) );
          if (++count >= state->devices_capacity) break;
      }
-@@ -232,12 +361,26 @@ static void input_thread_update_device_list( struct input_thread_state *state )
+@@ -232,16 +363,31 @@ static void input_thread_update_device_list( struct input_thread_state *state )
          case DI8DEVTYPE_MOUSE:
              if (device->dwCoopLevel & DISCL_EXCLUSIVE) rawinput_mouse.dwFlags |= RIDEV_CAPTUREMOUSE;
              if (!device->use_raw_input) mouse_ll_count++;
@@ -205,7 +207,12 @@ index 62365f0b323..55d4001a519 100644
              else rawinput_device = &rawinput_keyboard;
              break;
          }
-@@ -281,6 +424,13 @@ static void input_thread_update_device_list( struct input_thread_state *state )
+ 
++
+         if (rawinput_device)
+         {
+             if (device->dwCoopLevel & DISCL_BACKGROUND) rawinput_device->dwFlags |= RIDEV_INPUTSINK;
+@@ -281,6 +427,13 @@ static void input_thread_update_device_list( struct input_thread_state *state )
  
      state->rawinput_devices[0] = rawinput_mouse;
      state->rawinput_devices[1] = rawinput_keyboard;
@@ -219,7 +226,7 @@ index 62365f0b323..55d4001a519 100644
  }
  
  static LRESULT WINAPI di_em_win_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
-@@ -301,6 +451,17 @@ static LRESULT WINAPI di_em_win_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPAR
+@@ -301,6 +454,17 @@ static LRESULT WINAPI di_em_win_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPAR
              WARN( "Unexpected HID rawinput message\n" );
          else
          {
@@ -237,7 +244,7 @@ index 62365f0b323..55d4001a519 100644
              for (i = state->events_count; i < state->devices_count; ++i)
              {
                  struct dinput_device *device = state->devices[i];
-@@ -321,6 +482,10 @@ static LRESULT WINAPI di_em_win_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPAR
+@@ -321,6 +485,10 @@ static LRESULT WINAPI di_em_win_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPAR
                  default: break;
                  }
              }

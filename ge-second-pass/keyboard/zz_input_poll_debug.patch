@@ -158,7 +158,7 @@ index 4166d18..0000000 100644
      DWORD pid;
  
 +    if (input_poll_debug_enabled())
-+        ERR( "INPUTDBG dinput.acquire iface=%p raw=%u coop=0x%x status=%u user_size=%u dev_size=%u event=%p guid=%s\n",
++        ERR( "INPUTDBG dinput.acquire iface=%p raw=%u coop=0x%lx status=%u user_size=%lu dev_size=%lu event=%p guid=%s\n",
 +             iface, impl->use_raw_input, impl->dwCoopLevel, impl->status,
 +             impl->user_format.dwDataSize, impl->device_format.dwDataSize, impl->hEvent, debugstr_guid( &impl->guid ) );
 +
@@ -170,7 +170,7 @@ index 4166d18..0000000 100644
      if (hr != DI_OK) return hr;
  
 +    if (input_poll_debug_enabled())
-+        ERR( "INPUTDBG dinput.acquire.result iface=%p hr=%#lx status=%u raw=%u coop=0x%x\n",
++        ERR( "INPUTDBG dinput.acquire.result iface=%p hr=%#lx status=%u raw=%u coop=0x%lx\n",
 +             iface, hr, impl->status, impl->use_raw_input, impl->dwCoopLevel );
 +
      dinput_hooks_acquire_device( iface );
@@ -181,7 +181,7 @@ index 4166d18..0000000 100644
      HRESULT hr = DI_OK;
  
 +    if (input_poll_debug_enabled())
-+        ERR( "INPUTDBG dinput.unacquire iface=%p raw=%u coop=0x%x status=%u user_size=%u dev_size=%u event=%p guid=%s\n",
++        ERR( "INPUTDBG dinput.unacquire iface=%p raw=%u coop=0x%lx status=%u user_size=%lu dev_size=%lu event=%p guid=%s\n",
 +             iface, impl->use_raw_input, impl->dwCoopLevel, impl->status,
 +             impl->user_format.dwDataSize, impl->device_format.dwDataSize, impl->hEvent, debugstr_guid( &impl->guid ) );
 +
@@ -223,7 +223,7 @@ index 4166d18..0000000 100644
      instance->dwSize = size;
  
 +    if (input_poll_debug_enabled())
-+        ERR( "INPUTDBG dinput.info iface=%p guid=%s devtype=%#lx raw=%u user_size=%u dev_size=%u inst_guid=%s product_guid=%s usage_page=%u usage=%u\n",
++        ERR( "INPUTDBG dinput.info iface=%p guid=%s devtype=%#lx raw=%u user_size=%lu dev_size=%lu inst_guid=%s product_guid=%s usage_page=%u usage=%u\n",
 +             iface, debugstr_guid( &impl->guid ), impl->instance.dwDevType, impl->use_raw_input,
 +             impl->user_format.dwDataSize, impl->device_format.dwDataSize,
 +             debugstr_guid( &impl->instance.guidInstance ), debugstr_guid( &impl->instance.guidProduct ),
@@ -237,7 +237,7 @@ index 4166d18..0000000 100644
      struct dinput_device *This = impl_from_IDirectInputDevice8W( iface );
  
 +    if (input_poll_debug_enabled())
-+        ERR( "INPUTDBG dinput.set_event iface=%p raw=%u coop=0x%x status=%u old_event=%p new_event=%p guid=%s\n",
++        ERR( "INPUTDBG dinput.set_event iface=%p raw=%u coop=0x%lx status=%u old_event=%p new_event=%p guid=%s\n",
 +             iface, This->use_raw_input, This->dwCoopLevel, This->status,
 +             This->hEvent, event, debugstr_guid( &This->guid ) );
 +
@@ -261,7 +261,7 @@ index 4166d18..0000000 100644
      struct dinput_device *This = impl_from_IDirectInputDevice8W( iface );
  
 +    if (input_poll_debug_enabled())
-+        ERR( "INPUTDBG dinput.qi iface=%p iid=%s guid=%s raw=%u coop=0x%x out=%p\n",
++        ERR( "INPUTDBG dinput.qi iface=%p iid=%s guid=%s raw=%u coop=0x%lx out=%p\n",
 +             iface, debugstr_guid( iid ), debugstr_guid( &This->guid ), This->use_raw_input, This->dwCoopLevel, out );
 +
      TRACE( "iface %p, iid %s, out %p.\n", iface, debugstr_guid( iid ), out );
