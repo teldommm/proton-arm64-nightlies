@@ -112,7 +112,9 @@ if [[ $ENABLE_NTSYNC -eq 1 ]]; then
         "$SCRIPT_DIR/../patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0163-ntdll-Retrieve-and-cache-an-ntsync-device-in-wait-ca.patch" \
         "$SCRIPT_DIR/../patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0164-server-Add-an-object-operation-to-retrieve-an-in-pro.patch" \
         "$SCRIPT_DIR/../patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0165-ntsync-implementation.patch" \
-        "$SCRIPT_DIR/../patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0166-Finish-up-ntsync-console-implementation.patch"
+        "$SCRIPT_DIR/../patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0166-Finish-up-ntsync-console-implementation.patch" \
+        "$SCRIPT_DIR/../patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0172-ntdll-ntsync-remove-unused-variable-fix-datatypes.patch"
+    python3 "$SCRIPT_DIR/fix_ntsync.py" "$SOURCE_DIR"
 fi
 
 # --- Clean if requested ---

@@ -12,3 +12,4 @@
 !/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0164-server-Add-an-object-operation-to-retrieve-an-in-pro.patch
 !/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0165-ntsync-implementation.patch
 !/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0166-Finish-up-ntsync-console-implementation.patch
+!/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0172-ntdll-ntsync-remove-unused-variable-fix-datatypes.patch
