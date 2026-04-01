@@ -72,7 +72,12 @@ txt = txt.replace(
 
 txt = txt.replace(
     '    done\n  fi',
-    '    done\n    if [ -x ./config.status ]; then ./config.status; fi\n  fi'
+    '    done\n'
+    '    if [ -x ./tools/make_requests ]; then ./tools/make_requests; fi\n'
+    '    if [ -x ./tools/make_specfiles ]; then ./tools/make_specfiles; fi\n'
+    '    if [ -x ./tools/make_makefiles ]; then ./tools/make_makefiles; fi\n'
+    '    if [ -x ./config.status ]; then ./config.status; fi\n'
+    '  fi'
 )
 
 with open(path, 'w') as f:
