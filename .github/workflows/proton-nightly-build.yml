@@ -52,7 +52,7 @@ on:
         default: false
         type: boolean
       ge_perf_second_pass:
-        description: 'Apply optional GE second-pass performance patch(es)'
+        description: 'Apply optional GE performance patch bundle, including wow64 OpenGL mapping speedups'
         required: false
         default: false
         type: boolean
@@ -265,6 +265,16 @@ jobs:
           echo "=== shell32 SHFileOperation null-path workaround applied ==="
           printf '%s\n' "$OPTIONAL_SHELL32_PATCH"
 
+          OPTIONAL_LOADER_PATCH="loader_preloader_silence_missing_r_debug.patch"
+          cp "$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass/loader/$OPTIONAL_LOADER_PATCH" \
+            "wine-source/android/patches/$OPTIONAL_LOADER_PATCH"
+          python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
+            "$OPTIONAL_LOADER_PATCH"
+          python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
+            "$OPTIONAL_LOADER_PATCH"
+          echo "=== loader _r_debug log noise workaround applied ==="
+          printf '%s\n' "$OPTIONAL_LOADER_PATCH"
+
           OPTIONAL_EXPLORER_PATCH="explorer_startmenu_shutdown_latch.patch"
           cp "$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass/explorer/$OPTIONAL_EXPLORER_PATCH" \
             "wine-source/android/patches/$OPTIONAL_EXPLORER_PATCH"
@@ -334,16 +344,42 @@ jobs:
             OPTIONAL_GE_PERF_DIR="wine-source/android/patches/optional-ge-perf"
             OPTIONAL_GE_PERF_PATCH="6559c43-ntdll-validate-fd-type-in-ioctl-afd-wine-complete-async.patch"
             OPTIONAL_GE_EVENT_PATCH="dlls_winex11_drv_event_c.patch"
+            OPTIONAL_OPENGL_PERF_PATCH_1="0113-opengl32-Improve-wow64-mapping-performance-by-20x.patch"
+            OPTIONAL_OPENGL_PERF_PATCH_2="0114-HACK-opengl32-Reuse-allocated-memory.patch"
+            OPTIONAL_OPENGL_PERF_PATCH_3="0115-fixup-opengl32-Support-map-buffer-offsets.patch"
+            OPTIONAL_OPENGL_PERF_PATCH_4="0127-opengl32-Use-VirtualAlloc-instead-of-NtAllocateVirtu.patch"
             mkdir -p "$OPTIONAL_GE_PERF_DIR"
             cp "$GITHUB_WORKSPACE/ge-second-pass/performance/$OPTIONAL_GE_PERF_PATCH" "$OPTIONAL_GE_PERF_DIR/"
+            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/$OPTIONAL_OPENGL_PERF_PATCH_1" "$OPTIONAL_GE_PERF_DIR/"
+            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/$OPTIONAL_OPENGL_PERF_PATCH_2" "$OPTIONAL_GE_PERF_DIR/"
+            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/$OPTIONAL_OPENGL_PERF_PATCH_3" "$OPTIONAL_GE_PERF_DIR/"
+            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/$OPTIONAL_OPENGL_PERF_PATCH_4" "$OPTIONAL_GE_PERF_DIR/"
             cp "$OPTIONAL_GE_PERF_DIR"/*.patch wine-source/android/patches/
             cp "$GITHUB_WORKSPACE/ge-second-pass/mouse/dlls_winex11_drv_mouse_c.patch" "wine-source/android/patches/dlls_winex11_drv_mouse_c.patch"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_GE_PERF_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_GE_PERF_PATCH"
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
+              "$OPTIONAL_GE_PERF_PATCH" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_1" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_2" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_3" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_4"
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
+              "$OPTIONAL_GE_PERF_PATCH" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_1" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_2" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_3" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_4"
             cp "$GITHUB_WORKSPACE/ge-second-pass/focus/$OPTIONAL_GE_EVENT_PATCH" "$OPTIONAL_GE_PERF_DIR/"
             cp "$OPTIONAL_GE_PERF_DIR/$OPTIONAL_GE_EVENT_PATCH" wine-source/android/patches/
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_GE_EVENT_PATCH"
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_GE_EVENT_PATCH"
+            echo "=== optional GE performance patch bundle applied ==="
+            printf '%s\n' \
+              "$OPTIONAL_GE_PERF_PATCH" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_1" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_2" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_3" \
+              "$OPTIONAL_OPENGL_PERF_PATCH_4" \
+              "$OPTIONAL_GE_EVENT_PATCH"
           fi
 
 

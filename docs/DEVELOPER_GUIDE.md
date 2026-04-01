@@ -17,6 +17,7 @@ Current high-level flow:
 
 That local patch layer includes `patches/ge-gamenative-firstpass/explorer/explorer_startmenu_shutdown_latch.patch`, which avoids the blank mouse-only screen after exiting from the Start menu or a shortcut-launched game.
 It can also opt into the local `ntsync` patch chain from `patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0163-...0166-...` for explicit test builds.
+The optional GE performance bundle now also includes the generic `opengl32` wow64 buffer-mapping speedup series from that tree: `0113`, `0114`, `0115`, and `0127`, plus the existing `6559c43` AFD completion patch.
 
 ## Important Current Decisions
 

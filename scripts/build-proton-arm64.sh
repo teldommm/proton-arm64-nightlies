@@ -13,6 +13,7 @@
 #   --skip-configure      Skip configure step (resume build)
 #   --skip-tools          Skip host tools build (if already built)
 #   --enable-ntsync       Apply the optional ntsync patch series
+#   --enable-ge-perf      Apply the optional GE performance patch bundle
 #   --clean               Clean build directory before starting
 #
 # Environment variables:
@@ -33,6 +34,7 @@ SKIP_CONFIGURE=0
 SKIP_TOOLS=0
 CLEAN_BUILD=0
 ENABLE_NTSYNC=0
+ENABLE_GE_PERF=0
 ANDROID_API=28
 PROFILE_VERSION="${PROFILE_VERSION:-10.0.99-arm64ec}"
 PROFILE_VERSION_CODE="${PROFILE_VERSION_CODE:-1}"
@@ -47,6 +49,7 @@ while [[ $# -gt 0 ]]; do
         --skip-configure) SKIP_CONFIGURE=1;   shift ;;
         --skip-tools)     SKIP_TOOLS=1;       shift ;;
         --enable-ntsync)  ENABLE_NTSYNC=1;    shift ;;
+        --enable-ge-perf) ENABLE_GE_PERF=1;   shift ;;
         --clean)          CLEAN_BUILD=1;      shift ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
@@ -103,6 +106,7 @@ fi
 # Keep local builds aligned with the workflow patch set for Winlator container exit.
 "$SCRIPT_DIR/apply_patch_series.sh" \
     "$SOURCE_DIR" \
+    "$SCRIPT_DIR/../patches/ge-gamenative-firstpass/loader/loader_preloader_silence_missing_r_debug.patch" \
     "$SCRIPT_DIR/../patches/ge-gamenative-firstpass/explorer/explorer_startmenu_shutdown_latch.patch"
 
 if [[ $ENABLE_NTSYNC -eq 1 ]]; then
@@ -129,6 +133,17 @@ if [[ $ENABLE_NTSYNC -eq 1 ]]; then
         "$NTSYNC_PATCH_DIR/0166-Finish-up-ntsync-console-implementation.patch" \
         "$NTSYNC_PATCH_DIR/0172-ntdll-ntsync-remove-unused-variable-fix-datatypes.patch"
     python3 "$SCRIPT_DIR/fix_ntsync.py" "$SOURCE_DIR"
+fi
+
+if [[ $ENABLE_GE_PERF -eq 1 ]]; then
+    log "Applying optional GE performance patch bundle"
+    "$SCRIPT_DIR/apply_patch_series.sh" \
+        "$SOURCE_DIR" \
+        "$SCRIPT_DIR/../ge-second-pass/performance/6559c43-ntdll-validate-fd-type-in-ioctl-afd-wine-complete-async.patch" \
+        "$SCRIPT_DIR/../patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0113-opengl32-Improve-wow64-mapping-performance-by-20x.patch" \
+        "$SCRIPT_DIR/../patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0114-HACK-opengl32-Reuse-allocated-memory.patch" \
+        "$SCRIPT_DIR/../patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0115-fixup-opengl32-Support-map-buffer-offsets.patch" \
+        "$SCRIPT_DIR/../patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0127-opengl32-Use-VirtualAlloc-instead-of-NtAllocateVirtu.patch"
 fi
 
 # --- Clean if requested ---

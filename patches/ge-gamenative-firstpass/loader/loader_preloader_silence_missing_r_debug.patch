@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@example.com>
+Date: Tue, 1 Apr 2026 00:00:00 -0400
+Subject: [PATCH] loader: Silence missing ld.so _r_debug log noise.
+
+Some Android/Winlator environments do not expose `_r_debug` from the dynamic
+loader namespace. Wine can continue fine in that case; the current message is
+just noisy in the runtime log dialog.
+---
+ loader/preloader.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/loader/preloader.c b/loader/preloader.c
+--- a/loader/preloader.c
++++ b/loader/preloader.c
+@@ -1508,8 +1508,7 @@ void* wld_start( void **stack )
+ 
+     /* expose ld.so _r_debug as a separate namespace in r_next */
+     ld_so_r_debug = find_symbol( &ld_so_map, "_r_debug", STT_OBJECT );
+-    if (ld_so_r_debug) _r_debug.r_next = (struct wld_r_debug_extended *)ld_so_r_debug;
+-    else wld_printf( "_r_debug not found in ld.so\n" );
++    if (ld_so_r_debug) _r_debug.r_next = (struct wld_r_debug_extended *)ld_so_r_debug;
+ 
+     _r_debug_state(); /* notify GDB that _r_debug is ready */
+-- 
+2.50.0
