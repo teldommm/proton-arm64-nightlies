@@ -63,4 +63,4 @@ The workflow runs daily at 2 AM UTC and can also be started manually from the [A
 
 ## License
 
-This repository is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE).
+This repository is licensed under the GPL General Public License v3.0. See [LICENSE](LICENSE).
