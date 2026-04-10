@@ -2,7 +2,7 @@ name: Proton Bleeding-Edge Build
 
 on:
   schedule:
-    - cron: '15 */6 * * *'
+    - cron: '15 */24 * * *'
   workflow_dispatch:
     inputs:
       runner:
