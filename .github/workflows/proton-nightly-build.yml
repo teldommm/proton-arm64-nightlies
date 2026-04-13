@@ -317,25 +317,25 @@ jobs:
           fi
 
           if [ "${{ github.event.inputs.extra_winebus_patches || 'false' }}" = "true" ]; then
-            OPTIONAL_WINEBUS_BASE="https://raw.githubusercontent.com/GloriousEggroll/proton-ge-custom/master/patches/wine-hotfixes/wine-wayland"
             OPTIONAL_WINEBUS_DIR="wine-source/android/patches/optional-winebus"
+            OPTIONAL_WINEBUS_SRC="$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland"
             mkdir -p "$OPTIONAL_WINEBUS_DIR"
             for patch in \
-              0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
-              0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
-              0106-winebus-remove-duplicate-code.patch; do
-              wget -q "$OPTIONAL_WINEBUS_BASE/$patch" -O "$OPTIONAL_WINEBUS_DIR/$patch"
+              0069-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
+              0087-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
+              0112-winebus-remove-duplicate-code.patch; do
+              cp "$OPTIONAL_WINEBUS_SRC/$patch" "$OPTIONAL_WINEBUS_DIR/$patch"
               sed -i 's/\r$//' "$OPTIONAL_WINEBUS_DIR/$patch"
             done
             cp "$OPTIONAL_WINEBUS_DIR"/*.patch wine-source/android/patches/
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
-              0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
-              0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
-              0106-winebus-remove-duplicate-code.patch
+              0069-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
+              0087-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
+              0112-winebus-remove-duplicate-code.patch
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
-              0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
-              0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
-              0106-winebus-remove-duplicate-code.patch
+              0069-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
+              0087-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
+              0112-winebus-remove-duplicate-code.patch
           fi
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.ge_perf_second_pass && 'true' || 'false' }}" = "true" ]; then
