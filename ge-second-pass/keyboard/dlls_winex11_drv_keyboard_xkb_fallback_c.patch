@@ -5,11 +5,11 @@ index 0456d819bc8..c8a3b11fc0b 100644
 @@ -1490,10 +1490,17 @@ X11DRV_KEYBOARD_DetectLayout( Display *display )
    }
  
-   memset( ckey, 0, sizeof(ckey) );
 +  XKeyEvent det;
 +  memset(&det, 0, sizeof(det));
 +  det.display = display;
 +  det.type = KeyPress;
+   memset( ckey, 0, sizeof(ckey) );
    for (keyc = min_keycode; keyc <= max_keycode; keyc++) {
        /* get data for keycode from X server */
 +      det.keycode = (KeyCode)keyc;
@@ -21,14 +21,20 @@ index 0456d819bc8..c8a3b11fc0b 100644
          ckey[keyc][i] = keysym_to_char(keysym);
          if (TRACE_ON(keyboard))
          {
-@@ -1624,16 +1631,20 @@ void X11DRV_InitKeyboard( Display *display )
+@@ -1624,16 +1631,26 @@ void X11DRV_InitKeyboard( Display *display )
  		int k;
  
  		for (k = 0; k < keysyms_per_keycode; k += 1)
 -                    if (XkbKeycodeToKeysym( display, *kcp, 0, k ) == XK_Num_Lock)
 +		{
-+                    KeySym ksym = XkbKeycodeToKeysym( display, *kcp, 0, k );
-+                    if (!ksym) { XKeyEvent tmpev = {0}; tmpev.display = display; tmpev.keycode = *kcp; tmpev.type = KeyPress; ksym = XLookupKeysym(&tmpev, k); }
++                    XKeyEvent tmpev;
++                    KeySym ksym;
++                    memset(&tmpev, 0, sizeof(tmpev));
++                    tmpev.display = display;
++                    tmpev.keycode = *kcp;
++                    tmpev.type = KeyPress;
++                    ksym = XkbKeycodeToKeysym( display, *kcp, 0, k );
++                    if (!ksym) ksym = XLookupKeysym(&tmpev, k);
 +                    if (ksym == XK_Num_Lock)
  		    {
                          NumLockMask = 1 << i;
@@ -44,7 +50,7 @@ index 0456d819bc8..c8a3b11fc0b 100644
              }
      }
      XFreeModifiermap(mmp);
-@@ -1682,6 +1693,7 @@ void X11DRV_InitKeyboard( Display *display )
+@@ -1682,6 +1699,7 @@ void X11DRV_InitKeyboard( Display *display )
  	      int maxlen=0,maxval=-1,ok;
  	      for (i=0; i<syms; i++) {
      keysym = XkbKeycodeToKeysym( display, keyc, 0, i );
@@ -52,7 +58,7 @@ index 0456d819bc8..c8a3b11fc0b 100644
                  ckey[i] = keysym_to_char(keysym);
  	      }
  	      /* find key with longest match streak */
-@@ -1815,17 +1827,54 @@ void X11DRV_InitKeyboard( Display *display )
+@@ -1815,17 +1833,54 @@ void X11DRV_InitKeyboard( Display *display )
      } /* for */
  #undef VKEY_IF_NOT_USED
  
@@ -116,24 +122,30 @@ index 0456d819bc8..c8a3b11fc0b 100644
  	keyc2scan[keyc]=scan++;
        }
  
-@@ -1941,7 +1990,11 @@ SHORT X11DRV_VkKeyScanEx( WCHAR wChar, HKL hkl )
+@@ -1941,7 +1996,17 @@ SHORT X11DRV_VkKeyScanEx( WCHAR wChar, HKL hkl )
      }
  
      for (index = 0; index < 4; index++) /* find shift state */
 -        if (XkbKeycodeToKeysym( display, keycode, 0, index ) == keysym) break;
 +    {
-+        KeySym ks = XkbKeycodeToKeysym( display, keycode, 0, index );
-+        if (!ks) { XKeyEvent tmpev = {0}; tmpev.display = display; tmpev.keycode = keycode; tmpev.type = KeyPress; ks = XLookupKeysym(&tmpev, index); }
++        XKeyEvent tmpev;
++        KeySym ks;
++        memset(&tmpev, 0, sizeof(tmpev));
++        tmpev.display = display;
++        tmpev.keycode = keycode;
++        tmpev.type = KeyPress;
++        ks = XkbKeycodeToKeysym( display, keycode, 0, index );
++        if (!ks) ks = XLookupKeysym(&tmpev, index);
 +        if (ks == keysym) break;
 +    }
  
      pthread_mutex_unlock( &kbd_mutex );
  
-@@ -2192,6 +2245,7 @@ INT X11DRV_GetKeyNameText( LONG lParam, LPWSTR lpBuffer, INT nSize )
+@@ -2192,6 +2257,7 @@ INT X11DRV_GetKeyNameText( LONG lParam, LPWSTR lpBuffer, INT nSize )
  
        keyc = (KeyCode) keyi;
        keys = XkbKeycodeToKeysym( display, keyc, 0, 0 );
-+      if (!keys) { XKeyEvent tmpev = {0}; tmpev.display = display; tmpev.keycode = keyc; tmpev.type = KeyPress; keys = XLookupKeysym(&tmpev, 0); }
++      if (!keys) { XKeyEvent tmpev; memset(&tmpev, 0, sizeof(tmpev)); tmpev.display = display; tmpev.keycode = keyc; tmpev.type = KeyPress; keys = XLookupKeysym(&tmpev, 0); }
        name = XKeysymToString(keys);
  
        if (name && (vkey == VK_SHIFT || vkey == VK_CONTROL || vkey == VK_MENU))
