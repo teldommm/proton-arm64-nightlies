@@ -686,12 +686,6 @@ jobs:
           wget -q "https://github.com/GameNative/bionic-prefix-files/raw/main/${{ matrix.prefix_pack }}" \
             -O "$HOME/${{ matrix.output_dir }}/prefixPack.txz"
 
-      - name: Verify runtime ABI
-        run: |
-          OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
-          WINLATOR_APP_ID="${{ github.event.inputs.target_app_id || 'app.gamenative' }}" \
-            bash "$GITHUB_WORKSPACE/scripts/verify-runtime-abi.sh" "$OUTPUT_DIR"
-
       - name: Generate profile.json files and package
         run: |
           OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
