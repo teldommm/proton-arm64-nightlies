@@ -231,6 +231,22 @@ jobs:
           cp -r gamenative-src/android wine-source/android
           cp -r gamenative-src/build-scripts wine-source/build-scripts
           rm -rf gamenative-src
+          python3 <<'PY'
+          from pathlib import Path
+
+          for rel in (
+              "wine-source/build-scripts/build-step-arm64ec.sh",
+              "wine-source/build-scripts/build-step-x86_64.sh",
+          ):
+              path = Path(rel)
+              text = path.read_text(encoding="utf-8")
+              new_text = text.replace("--with-fontconfig \\\n", "--without-fontconfig \\\n")
+              if new_text != text:
+                  path.write_text(new_text, encoding="utf-8")
+                  print(f"Patched fontconfig flag in {path}")
+              else:
+                  print(f"No fontconfig flag change needed in {path}")
+          PY
 
       - name: Prepare patch set and build scripts
         run: |
