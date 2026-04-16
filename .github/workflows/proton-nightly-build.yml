@@ -98,8 +98,7 @@ jobs:
           git clone --depth=1 https://github.com/ValveSoftware/Proton proton-source
           git -C proton-source fetch --depth=1 origin "$PROTON_REF"
           git -C proton-source checkout FETCH_HEAD
-          git -C proton-source submodule update --init --recursive --depth=1 wine
-          REMOTE_FULL_HASH="$(git -C proton-source/wine rev-parse HEAD)"
+          REMOTE_FULL_HASH="$(git -C proton-source ls-tree HEAD wine | awk '{print $3}')"
           rm -rf proton-source
 
           REMOTE_SHORT_HASH="$(printf '%s' "$REMOTE_FULL_HASH" | cut -c1-7)"
@@ -187,21 +186,24 @@ jobs:
       - name: Clone Proton source
         run: |
           rm -rf proton-source wine-source
-          WINE_REF="${{ github.event.inputs.wine_ref || 'proton_11.0' }}"
-          git clone --depth=1 --recurse-submodules --shallow-submodules --branch "$WINE_REF" \
-            https://github.com/ValveSoftware/Proton proton-source \
+          PROTON_REF="${{ github.event.inputs.wine_ref || 'proton_11.0' }}"
+          git clone --depth=1 --branch "$PROTON_REF" https://github.com/ValveSoftware/Proton proton-source \
           || {
             git clone --depth=1 https://github.com/ValveSoftware/Proton proton-source
-            git -C proton-source fetch --depth=1 origin "$WINE_REF"
+            git -C proton-source fetch --depth=1 origin "$PROTON_REF"
             git -C proton-source checkout FETCH_HEAD
-            git -C proton-source submodule update --init --recursive --depth=1 wine
           }
-          if [ ! -d proton-source/wine ]; then
-            git -C proton-source submodule update --init --recursive --depth=1 wine
-          fi
-          mv proton-source/wine wine-source
+          WINE_URL="$(git -C proton-source config --file .gitmodules --get submodule.wine.url)"
+          WINE_COMMIT="$(git -C proton-source ls-tree HEAD wine | awk '{print $3}')"
+          git clone --depth=1 "$WINE_URL" wine-source \
+          || {
+            git clone "$WINE_URL" wine-source
+          }
+          git -C wine-source fetch --depth=1 origin "$WINE_COMMIT"
+          git -C wine-source checkout FETCH_HEAD
           rm -rf proton-source
-          echo "Proton ref: $WINE_REF"
+          echo "Proton ref: $PROTON_REF"
+          echo "Wine commit: $WINE_COMMIT"
           git -C wine-source rev-parse HEAD
 
       - name: Clone GameNative patches and build scripts
