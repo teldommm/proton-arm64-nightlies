@@ -13,7 +13,7 @@
   "artifacts": {
     "arm64ec": {
       "versionName": "proton-proton_11-20260415-79604fd-arm64ec",
-      "profileVersion": "11",
+      "profileVersion": "11-1",
       "wcp": {
         "fileName": "proton-proton-proton_11-20260415-79604fd-arm64ec.wcp",
         "sha256": "db4003d0cd0aab230980b6323e3b65dc8618d68acfac43d1f1fe03996047d939"

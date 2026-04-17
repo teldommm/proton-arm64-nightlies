@@ -59,7 +59,7 @@ If you want stock GameNative compatibility without an app-side parser change, ke
 The build bakes its install path to:
 
 ```text
-/data/data/com.winlator.cmod/files/imagefs/opt/proton-11
+/data/data/com.winlator.cmod/files/imagefs/opt/proton-11-1
 ```
 
 If you change the internal profile version, update the baked install path too.

@@ -136,7 +136,7 @@ jobs:
             build_script: build-step-arm64ec.sh
             output_dir: compiled-files-aarch64
             prefix_pack: prefixPack-arm64ec.txz
-            profile_version: 11
+            profile_version: 11-1
             display_arch: ARM64EC
             sysvshm: true
 
@@ -800,7 +800,7 @@ jobs:
           export PROFILE_DESCRIPTION
 
           mkdir -p "$GITHUB_WORKSPACE/output"
-          PROTON_PROFILE_VERSION="11"
+          PROTON_PROFILE_VERSION="${PROFILE_VERSION}"
           PROTON_VERSION_CODE=1
           WINE_VERSION_CODE=0
 

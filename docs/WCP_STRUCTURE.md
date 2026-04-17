@@ -55,7 +55,7 @@ The external `.wcp` naming uses `proton-proton_11`, and the internal `versionNam
 That internal value currently drives installation to:
 
 ```text
-/opt/proton-11
+/opt/proton-11-1
 ```
 
 ## Packaging Commands

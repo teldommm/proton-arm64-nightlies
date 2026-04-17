@@ -43,7 +43,7 @@ That is deliberate. Stock GameNative only recognizes ARM64EC Proton when the int
 The build is baked against:
 
 ```text
-/data/data/com.winlator.cmod/files/imagefs/opt/proton-11
+/data/data/com.winlator.cmod/files/imagefs/opt/proton-11-1
 ```
 
 That path is chosen to match how the packaged runtime is imported and used at runtime. This fixed the earlier `kernel32.dll` startup failure caused by building against `/opt/wine`.
@@ -98,7 +98,7 @@ Those must continue to point at the same `/opt/proton-*` directory.
 ## Testing Priorities
 
 1. Confirm the package imports
-2. Confirm the runtime launches from `/opt/proton-11`
+2. Confirm the runtime launches from `/opt/proton-11-1`
 3. Confirm there is no fallback to `/opt/wine`
 4. Confirm there is no `could not load kernel32.dll`
 5. Only then debug game-specific runtime failures
