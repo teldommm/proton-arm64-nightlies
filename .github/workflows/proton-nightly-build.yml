@@ -286,8 +286,6 @@ jobs:
             "wine-source/android/patches/test-bylaws/dlls_wow64_syscall_c.patch"
           cp "ge-second-pass/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch" \
             "wine-source/android/patches/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch"
-          cp "$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass/virtual/dlls_ntdll_unix_virtual_c.patch" \
-            "wine-source/android/patches/dlls_ntdll_unix_virtual_c.patch"
           cp "$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass/signal/dlls_ntdll_unix_signal_x86_64_c.patch" \
             "wine-source/android/patches/dlls_ntdll_unix_signal_x86_64_c.patch"
           find wine-source/android/patches -type f -name "*.patch" -exec sed -i 's/\r$//' {} +
@@ -313,6 +311,10 @@ jobs:
 
           python3 scripts/fix_loader_c.py wine-source
           echo "=== loader.c Android mallopt guard applied ==="
+
+          python3 scripts/fix_virtual_c.py wine-source
+          python3 scripts/fix_unix_virtual_c.py wine-source
+          echo "=== unix virtual.c Android address-space/writewatch workaround applied ==="
 
           OPTIONAL_EXPLORER_PATCH="explorer_startmenu_shutdown_latch.patch"
           cp "$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass/explorer/$OPTIONAL_EXPLORER_PATCH" \
@@ -487,9 +489,7 @@ jobs:
           python3 scripts/fix_window_c.py wine-source
           python3 scripts/fix_wineboot_c.py wine-source
           python3 scripts/fix_wdscore.py wine-source
-          python3 scripts/fix_virtual_c.py wine-source
           python3 scripts/fix_fsync.py wine-source
-          python3 scripts/fix_suspend_chain.py wine-source
 
           echo "=== repo-owned BYLAWS overrides ==="
           ls -la wine-source/android/patches/test-bylaws | grep -E 'dlls_(wow64_syscall|ntdll_signal_arm64ec)_c\.patch' || true

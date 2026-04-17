@@ -41,6 +41,76 @@ def patch_file(path, ops):
     return True
 
 
+def patch_ntdll_unix_thread(path):
+    if not os.path.exists(path):
+        print(f"ERROR: missing file {path}")
+        return False
+
+    with open(path, errors="replace") as f:
+        src = f.read()
+
+    changed = 0
+
+    desc = "extend supported thread flags"
+    old = (
+        "    static const ULONG supported_flags = THREAD_CREATE_FLAGS_CREATE_SUSPENDED | THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER;\n"
+    )
+    new = (
+        "    static const ULONG supported_flags = THREAD_CREATE_FLAGS_CREATE_SUSPENDED | THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH |\n"
+        "                                         THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER | THREAD_CREATE_FLAGS_SKIP_LOADER_INIT |\n"
+        "                                         THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE;\n"
+    )
+    src, rc = apply_once(src, desc, old, new)
+    if rc > 0:
+        changed += rc
+
+    if "WOW_TEB *wow_teb;" in src:
+        print("  [declare wow_teb] already applied, skipping")
+    else:
+        old = (
+            "    int request_pipe[2];\n"
+            "    TEB *teb;\n"
+        )
+        new = (
+            "    int request_pipe[2];\n"
+            "    WOW_TEB *wow_teb;\n"
+            "    TEB *teb;\n"
+        )
+        src, rc = apply_once(src, "declare wow_teb", old, new)
+        if rc > 0:
+            changed += rc
+
+    if (
+        "teb->SkipThreadAttach = !!(flags & THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH);" in src
+        and "wow_teb = get_wow_teb( teb );" in src
+    ):
+        print("  [propagate SkipThreadAttach/SkipLoaderInit flags] already applied, skipping")
+    else:
+        old = (
+            "    set_thread_id( teb, GetCurrentProcessId(), tid );\n\n"
+            "    thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;\n"
+        )
+        new = (
+            "    set_thread_id( teb, GetCurrentProcessId(), tid );\n\n"
+            "    teb->SkipThreadAttach = !!(flags & THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH);\n"
+            "    teb->SkipLoaderInit = !!(flags & THREAD_CREATE_FLAGS_SKIP_LOADER_INIT);\n"
+            "    wow_teb = get_wow_teb( teb );\n"
+            "    if (wow_teb) {\n"
+            "        wow_teb->SameTebFlags = teb->SameTebFlags;\n"
+            "    }\n\n"
+            "    thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;\n"
+        )
+        src, rc = apply_once(src, "propagate SkipThreadAttach/SkipLoaderInit flags", old, new)
+        if rc > 0:
+            changed += rc
+
+    with open(path, "w") as f:
+        f.write(src)
+
+    print(f"  -> {os.path.basename(path)} changes: {changed}")
+    return True
+
+
 def patch_wow64_process(path):
     if not os.path.exists(path):
         print(f"ERROR: missing file {path}")
@@ -197,43 +267,12 @@ def main():
         ),
     ]
 
-    ntdll_unix_thread_ops = [
-        (
-            "extend supported thread flags",
-            "    static const ULONG supported_flags = THREAD_CREATE_FLAGS_CREATE_SUSPENDED | THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER;\n",
-            "    static const ULONG supported_flags = THREAD_CREATE_FLAGS_CREATE_SUSPENDED | THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH |\n"
-            "                                         THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER | THREAD_CREATE_FLAGS_SKIP_LOADER_INIT |\n"
-            "                                         THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE;\n",
-        ),
-        (
-            "declare wow_teb",
-            "    int request_pipe[2];\n"
-            "    TEB *teb;\n",
-            "    int request_pipe[2];\n"
-            "    WOW_TEB *wow_teb;\n"
-            "    TEB *teb;\n",
-        ),
-        (
-            "propagate SkipThreadAttach/SkipLoaderInit flags",
-            "    set_thread_id( teb, GetCurrentProcessId(), tid );\n\n"
-            "    thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;\n",
-            "    set_thread_id( teb, GetCurrentProcessId(), tid );\n\n"
-            "    teb->SkipThreadAttach = !!(flags & THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH);\n"
-            "    teb->SkipLoaderInit = !!(flags & THREAD_CREATE_FLAGS_SKIP_LOADER_INIT);\n"
-            "    wow_teb = get_wow_teb( teb );\n"
-            "    if (wow_teb) {\n"
-            "        wow_teb->SameTebFlags = teb->SameTebFlags;\n"
-            "    }\n\n"
-            "    thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;\n",
-        ),
-    ]
-
     ok = True
     ok &= patch_wow64_process(os.path.join(wine_src, "dlls", "wow64", "process.c"))
     ok &= patch_file(os.path.join(wine_src, "server", "thread.h"), thread_h_ops)
     ok &= patch_file(os.path.join(wine_src, "server", "thread.c"), thread_c_ops)
     ok &= patch_file(os.path.join(wine_src, "server", "process.c"), process_c_ops)
-    ok &= patch_file(os.path.join(wine_src, "dlls", "ntdll", "unix", "thread.c"), ntdll_unix_thread_ops)
+    ok &= patch_ntdll_unix_thread(os.path.join(wine_src, "dlls", "ntdll", "unix", "thread.c"))
 
     verified = verify_markers(wine_src)
 

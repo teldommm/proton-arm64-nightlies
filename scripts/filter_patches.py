@@ -34,6 +34,7 @@ ALREADY_APPLIED = {
     "dlls_winex11_drv_x11drv_h.patch":      ("dlls/winex11.drv/x11drv.h",    "XATOM__NET_WM_HWND"),
     "dlls_winex11_drv_x11drv_main_c.patch": ("dlls/winex11.drv/x11drv_main.c", ['"_NET_WM_HWND"', "#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H\n    x11drv_xinput2_load();\n#endif"]),
     "dlls_winex11_drv_opengl_c.patch":      ("dlls/winex11.drv/opengl.c",    ['int wine_x11forceglx = 0;', 'atoi(getenv("WINE_X11FORCEGLX"))', '|| wine_x11forceglx)']),
+    "dlls_ntdll_unix_virtual_c.patch":      ("dlls/ntdll/unix/virtual.c",    ['0x7fffff0000', 'Kernel writewatches are not supported on Android', '#if defined(linux) && defined(__aarch64__) && !defined(__ANDROID__)']),
     "dlls_wineandroid_drv_window_c.patch":  ("dlls/wineandroid.drv/window.c", ["WINE_ANDROID_RELATIVE_MOUSE", "android_relative_mouse_active", "INPUTDBG android.motion"]),
     "dlls_nsiproxy_sys_ip_c.patch":         ("dlls/nsiproxy.sys/ip.c",        ["# include <net/if.h>", "mask_v4_to_prefix", "mask_v6_to_prefix"]),
     "programs_winemenubuilder_winemenubuilder_c.patch": ("programs/winemenubuilder/winemenubuilder.c", ['icons\\\\hicolor', '_wgetenv( L"WINECONFIGDIR" )', 'fprintf(file, "wine %s", escape(path));']),
