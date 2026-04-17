@@ -20,6 +20,11 @@ def main():
     version_code = int(sys.argv[3])
     description = sys.argv[4]
     profile_type = sys.argv[5] if len(sys.argv) > 5 else "proton"
+    profile_type_lower = profile_type.lower()
+    if profile_type_lower == "wine":
+        profile_type = "Wine"
+    elif profile_type_lower == "proton":
+        profile_type = "Proton"
 
     # GameNative uses "wine" as the paths key for BOTH Proton and Wine type profiles.
     # Confirmed from GameNative/proton-wine build-proton.yml CI workflow.
