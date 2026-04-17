@@ -472,6 +472,7 @@ jobs:
           python3 scripts/patch_build_script.py wine-source/build-scripts/build-step-x86_64.sh
 
           python3 scripts/fix_window_c.py wine-source
+          python3 scripts/fix_x11drv_h.py wine-source
           python3 scripts/fix_wineboot_c.py wine-source
           python3 scripts/fix_wdscore.py wine-source
           python3 scripts/fix_virtual_c.py wine-source
