@@ -290,6 +290,8 @@ jobs:
             "wine-source/android/patches/dlls_ntdll_unix_virtual_c.patch"
           cp "$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass/signal/dlls_ntdll_unix_signal_x86_64_c.patch" \
             "wine-source/android/patches/dlls_ntdll_unix_signal_x86_64_c.patch"
+          cp "$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass/opengl/dlls_winex11_drv_opengl_c.patch" \
+            "wine-source/android/patches/dlls_winex11_drv_opengl_c.patch"
           find wine-source/android/patches -type f -name "*.patch" -exec sed -i 's/\r$//' {} +
           sed -i 's/atoi("WINE_X11FORCEGLX")/atoi(getenv("WINE_X11FORCEGLX"))/g' \
             wine-source/android/patches/dlls_winex11_drv_opengl_c.patch

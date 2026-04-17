@@ -1,0 +1,27 @@
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -182,6 +182,9 @@ static const struct opengl_drawable_funcs x11drv_egl_surface_funcs;
+ static void init_opengl(void)
+ {
+     int error_base, event_base;
++#ifdef __ANDROID__
++    int wine_x11forceglx = 0;
++#endif
+     unsigned int i;
+ 
+@@ -329,7 +332,14 @@ static void init_opengl(void)
+ 
+     if(!X11DRV_WineGL_InitOpenglInfo()) goto failed;
+ 
++#ifdef __ANDROID__
++    if (getenv("WINE_X11FORCEGLX"))
++        wine_x11forceglx = atoi(getenv("WINE_X11FORCEGLX"));
++
++    if (XQueryExtension( gdi_display, "GLX", &glx_opcode, &event_base, &error_base ) || wine_x11forceglx)
++#else
+     if (XQueryExtension( gdi_display, "GLX", &glx_opcode, &event_base, &error_base ))
++#endif
+     {
+         TRACE("GLX is up and running error_base = %d\n", error_base);
+     } else {
