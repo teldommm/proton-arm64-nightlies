@@ -249,10 +249,6 @@ jobs:
           rm -f wine-source/android/patches/dlls_wow64_syscall_c.patch
           rm -f wine-source/android/patches/test-bylaws/dlls_wow64_syscall_c.patch
           rm -f wine-source/android/patches/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch
-          # Remove old XNoOp-style mouse patch — fully superseded by fix_mouse_c.py
-          # (called later in this branch). filter_patches.py would also skip it,
-          # but explicit removal avoids any fuzzy-apply failure from the android build system.
-          rm -f wine-source/android/patches/dlls_winex11_drv_mouse_c.patch
           mkdir -p wine-source/android/patches/test-bylaws
           cp "ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch" \
             "wine-source/android/patches/dlls_wow64_syscall_c.patch"
