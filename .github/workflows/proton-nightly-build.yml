@@ -760,8 +760,9 @@ jobs:
             if [ ! -e "$root/bin/wine" ]; then
               for candidate in \
                 "$root/lib/wine/wine" \
-                "$PWD/tools/wine/wine" \
-                "$PWD/wine"; do
+                "$PWD/wine" \
+                "$PWD/loader64/wine64" \
+                "$PWD/loader64/wine64.exe.so"; do
                 if [ -f "$candidate" ]; then
                   cp -f "$candidate" "$root/bin/wine"
                   echo "staged launcher frontend: $candidate -> $root/bin/wine"

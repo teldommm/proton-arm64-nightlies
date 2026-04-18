@@ -327,8 +327,9 @@ ensure_launcher() {
     if [[ ! -e "$root/bin/wine" ]]; then
         for candidate in \
             "$root/lib/wine/wine" \
-            "$BUILD_DIR/target/tools/wine/wine" \
-            "$BUILD_DIR/host/tools/wine/wine"; do
+            "$BUILD_DIR/target/wine" \
+            "$BUILD_DIR/target/loader64/wine64" \
+            "$BUILD_DIR/target/loader64/wine64.exe.so"; do
             if [[ -f "$candidate" ]]; then
                 cp -f "$candidate" "$root/bin/wine"
                 log "Staged launcher frontend: $candidate -> $root/bin/wine"
