@@ -208,7 +208,7 @@ jobs:
           git clone --depth=1 --branch "$GN_REF" \
             https://github.com/teldommm/ proton-wine gamenative-src \
           || {
-            git clone --depth=1 https://teldommm/GameNative/proton-wine gamenative-src
+            git clone --depth=1 https://github.com/teldommm/proton-wine gamenative-src
             git -C gamenative-src fetch --depth=1 origin "$GN_REF"
             git -C gamenative-src checkout FETCH_HEAD
           }
