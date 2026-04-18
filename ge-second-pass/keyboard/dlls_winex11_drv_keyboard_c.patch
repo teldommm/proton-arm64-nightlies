@@ -30,6 +30,24 @@ index 0456d819bc8..31e2d51c841 100644
  /* Returns the Windows virtual key code associated with the X event <e> */
  /* kbd_section must be held */
  static WORD EVENT_event_to_vkey( XIC xic, XKeyEvent *e)
+@@ -1380,10 +1380,17 @@ BOOL X11DRV_KeyEvent( HWND hwnd, XEvent *xev )
+ 
+     if (status == XLookupChars)
+     {
++        /* Android gameplay windows still need a normal key event even when XIM
++         * resolves printable text, otherwise old DirectInput titles can end up
++         * receiving IME text without any keyboard/scancode input. */
+         xim_set_result_string( hwnd, Str, ascii_chars );
++#ifndef __ANDROID__
+         if (buf != Str)
+             free( Str );
+         return TRUE;
++#else
++        TRACE_(key)( "continuing key dispatch after XLookupChars on Android\n" );
++#endif
+     }
+ 
+     pthread_mutex_lock( &kbd_mutex );
 @@ -1493,21 +1498,8 @@ X11DRV_KEYBOARD_DetectLayout( Display *display )
    for (keyc = min_keycode; keyc <= max_keycode; keyc++) {
        /* get data for keycode from X server */
