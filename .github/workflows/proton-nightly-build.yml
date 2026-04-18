@@ -2,7 +2,7 @@ name: Proton Bleeding-Edge Build
 
 on:
   schedule:
-    - cron: '15 */6 * * *'
+    - cron: '15 */24 * * *'
   workflow_dispatch:
     inputs:
       runner:
@@ -385,29 +385,24 @@ jobs:
             OPTIONAL_D2D_COMPAT_PATCH="fix-a-crash-in-ID2D1DeviceContext-if-no-target-is-set.patch"
             OPTIONAL_WM_DECOR_PATCH="0001-win32u-add-env-switch-to-disable-wm-decorations.patch"
             OPTIONAL_REGISTRY_COMPAT_PATCH="registry_RRF_RT_REG_SZ-RRF_RT_REG_EXPAND_SZ.patch"
-            OPTIONAL_KBD_XKB_FALLBACK_PATCH="dlls_winex11_drv_keyboard_xkb_fallback_c.patch"
             mkdir -p "$OPTIONAL_GE_COMPAT_DIR"
             cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/proton/$OPTIONAL_D2D_COMPAT_PATCH" "$OPTIONAL_GE_COMPAT_DIR/"
             cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/proton/$OPTIONAL_WM_DECOR_PATCH" "$OPTIONAL_GE_COMPAT_DIR/"
             cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/pending/$OPTIONAL_REGISTRY_COMPAT_PATCH" "$OPTIONAL_GE_COMPAT_DIR/"
-            cp "$GITHUB_WORKSPACE/ge-second-pass/keyboard/$OPTIONAL_KBD_XKB_FALLBACK_PATCH" "$OPTIONAL_GE_COMPAT_DIR/"
             cp "$OPTIONAL_GE_COMPAT_DIR"/*.patch wine-source/android/patches/
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
               "$OPTIONAL_D2D_COMPAT_PATCH" \
               "$OPTIONAL_WM_DECOR_PATCH" \
-              "$OPTIONAL_REGISTRY_COMPAT_PATCH" \
-              "$OPTIONAL_KBD_XKB_FALLBACK_PATCH"
+              "$OPTIONAL_REGISTRY_COMPAT_PATCH"
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
               "$OPTIONAL_D2D_COMPAT_PATCH" \
               "$OPTIONAL_WM_DECOR_PATCH" \
-              "$OPTIONAL_REGISTRY_COMPAT_PATCH" \
-              "$OPTIONAL_KBD_XKB_FALLBACK_PATCH"
+              "$OPTIONAL_REGISTRY_COMPAT_PATCH"
             echo "=== optional GE compatibility patch bundle applied ==="
             printf '%s\n' \
               "$OPTIONAL_D2D_COMPAT_PATCH" \
               "$OPTIONAL_WM_DECOR_PATCH" \
-              "$OPTIONAL_REGISTRY_COMPAT_PATCH" \
-              "$OPTIONAL_KBD_XKB_FALLBACK_PATCH"
+              "$OPTIONAL_REGISTRY_COMPAT_PATCH"
           fi
 
 
@@ -685,6 +680,12 @@ jobs:
         run: |
           wget -q "https://github.com/GameNative/bionic-prefix-files/raw/main/${{ matrix.prefix_pack }}" \
             -O "$HOME/${{ matrix.output_dir }}/prefixPack.txz"
+
+      - name: Verify runtime ABI
+        run: |
+          OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
+          WINLATOR_APP_ID="${{ github.event.inputs.target_app_id || 'app.gamenative' }}" \
+            bash "$GITHUB_WORKSPACE/scripts/verify-runtime-abi.sh" "$OUTPUT_DIR"
 
       - name: Generate profile.json files and package
         run: |
