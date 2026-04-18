@@ -272,18 +272,13 @@ jobs:
 
           cp "$GITHUB_WORKSPACE/ge-second-pass/keyboard/dlls_winex11_drv_keyboard_c.patch" \
             "wine-source/android/patches/dlls_winex11_drv_keyboard_c.patch"
-          cp "$GITHUB_WORKSPACE/ge-second-pass/keyboard/dlls_winex11_drv_keyboard_directinput_c.patch" \
-            "wine-source/android/patches/dlls_winex11_drv_keyboard_directinput_c.patch"
           python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
             "dlls_winex11_drv_keyboard_c.patch" \
-            "dlls_winex11_drv_keyboard_directinput_c.patch"
           python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
             "dlls_winex11_drv_keyboard_c.patch" \
-            "dlls_winex11_drv_keyboard_directinput_c.patch"
           echo "=== keyboard patches applied ==="
           printf '%s\n' \
-            "dlls_winex11_drv_keyboard_c.patch" \
-            "dlls_winex11_drv_keyboard_directinput_c.patch"
+            "dlls_winex11_drv_keyboard_c.patch"
 
           python3 scripts/fix_preloader_r_debug_noise.py wine-source
           echo "=== loader _r_debug log noise workaround applied ==="
