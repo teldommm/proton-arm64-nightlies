@@ -206,9 +206,9 @@ jobs:
         run: |
           GN_REF="${{ github.event.inputs.gamenative_ref || 'proton_10.0' }}"
           git clone --depth=1 --branch "$GN_REF" \
-            https://github.com/teldommm/proton-wine gamenative-src \
+            https://github.com/GameNative/proton-wine gamenative-src \
           || {
-            git clone --depth=1 https://github.com/teldommm/proton-wine gamenative-src
+            git clone --depth=1 https://github.com/GameNative/proton-wine gamenative-src
             git -C gamenative-src fetch --depth=1 origin "$GN_REF"
             git -C gamenative-src checkout FETCH_HEAD
           }
@@ -269,16 +269,6 @@ jobs:
             "$OPTIONAL_SHELL32_PATCH"
           echo "=== shell32 SHFileOperation null-path workaround applied ==="
           printf '%s\n' "$OPTIONAL_SHELL32_PATCH"
-
-          cp "$GITHUB_WORKSPACE/ge-second-pass/keyboard/dlls_winex11_drv_keyboard_c.patch" \
-            "wine-source/android/patches/dlls_winex11_drv_keyboard_c.patch"
-          python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
-            "dlls_winex11_drv_keyboard_c.patch" \
-          python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
-            "dlls_winex11_drv_keyboard_c.patch" \
-          echo "=== keyboard patches applied ==="
-          printf '%s\n' \
-            "dlls_winex11_drv_keyboard_c.patch"
 
           python3 scripts/fix_preloader_r_debug_noise.py wine-source
           echo "=== loader _r_debug log noise workaround applied ==="
@@ -690,6 +680,12 @@ jobs:
         run: |
           wget -q "https://github.com/GameNative/bionic-prefix-files/raw/main/${{ matrix.prefix_pack }}" \
             -O "$HOME/${{ matrix.output_dir }}/prefixPack.txz"
+
+      - name: Verify runtime ABI
+        run: |
+          OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
+          WINLATOR_APP_ID="${{ github.event.inputs.target_app_id || 'app.gamenative' }}" \
+            bash "$GITHUB_WORKSPACE/scripts/verify-runtime-abi.sh" "$OUTPUT_DIR"
 
       - name: Generate profile.json files and package
         run: |
