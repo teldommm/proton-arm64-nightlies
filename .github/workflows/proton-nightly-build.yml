@@ -98,7 +98,7 @@ jobs:
           if printf '%s' "$WINE_REF" | grep -Eq '^[0-9a-fA-F]{7,40}$'; then
             REMOTE_FULL_HASH="$WINE_REF"
           else
-            REMOTE_FULL_HASH="$(git ls-remote https://github.com/ValveSoftware/wine "$WINE_REF" "refs/heads/$WINE_REF" "refs/tags/$WINE_REF" | awk 'NR==1 {print $1}')"
+            REMOTE_FULL_HASH="$(git ls-remote https://github.com/teldommm/wine "$WINE_REF" "refs/heads/$WINE_REF" "refs/tags/$WINE_REF" | awk 'NR==1 {print $1}')"
           fi
 
           if [ -z "$REMOTE_FULL_HASH" ]; then
@@ -193,9 +193,9 @@ jobs:
           rm -rf wine-source
           WINE_REF="${{ github.event.inputs.wine_ref || 'bleeding-edge' }}"
           git clone --depth=1 --branch "$WINE_REF" \
-            https://github.com/ValveSoftware/wine wine-source \
+            https://github.com/teldommm/wine wine-source \
           || {
-            git clone --depth=1 https://github.com/ValveSoftware/wine wine-source
+            git clone --depth=1 https://github.com/teldommm/wine wine-source
             git -C wine-source fetch --depth=1 origin "$WINE_REF"
             git -C wine-source checkout FETCH_HEAD
           }
@@ -871,7 +871,7 @@ jobs:
           GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
           TAG="${{ steps.detect_changes.outputs.release_tag }}"
           TITLE="Proton bleeding-edge ARM64EC (${GIT_DATE})"
-          DEFAULT_NOTES="Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android build scripts. Includes ARM64EC packages in the same release. Automated bleeding-edge build; use at your own risk."
+          DEFAULT_NOTES="Built from teldommm/wine bleeding-edge @ ${GIT_HASH} with GameNative Android build scripts. Includes ARM64EC packages in the same release. Automated bleeding-edge build; use at your own risk."
           MANUAL_DESCRIPTION="${{ github.event.inputs.release_description || '' }}"
           if [ -n "$MANUAL_DESCRIPTION" ]; then
             NOTES="$DEFAULT_NOTES"$'\n\n'"Additional description: $MANUAL_DESCRIPTION"
