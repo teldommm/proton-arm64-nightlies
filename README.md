@@ -1,4 +1,4 @@
-# Proton ARM64 Bleeding-Edge Builds for Winlator
+# Proton ARM64 Bleeding-Edge Builds for Winlator(build closed because proton11 better)
 
 Automated Proton ARM64 builds for Android, based on Valve's `bleeding-edge` Wine branch with GameNative's Android and ARM64EC patch stack layered on top.
 
